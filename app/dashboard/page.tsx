@@ -1,6 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { LazyNook3D as Nook3D } from "../components/LazyNook3D";
+import type { NookAccessory, NookOutfit } from "../components/Nook3D";
 
 const navItems = ["Home", "Tasks", "Skills", "Marketplace", "Permissions", "Creator"];
 const taskLog = [
@@ -31,6 +33,13 @@ export default function Dashboard() {
   const [message, setMessage] = useState("Ready for a new task");
   const [installed, setInstalled] = useState<string[]>(["Browser Guide", "File Tidy"]);
   const [permissions, setPermissions] = useState({ sharedWindow: true, files: true, social: false, purchases: false });
+  const [appearance,setAppearance]=useState({name:"Orbit",primary:"#617fff",secondary:"#9db0ff",glow:"#7debff",outfit:"hoodie" as NookOutfit,accessory:"star" as NookAccessory});
+
+  useEffect(()=>{
+    const saved=window.localStorage.getItem("nook-creator-draft");
+    if(!saved)return;
+    try{const draft=JSON.parse(saved);setAppearance({name:draft.name||"Orbit",primary:draft.color?.primary||"#617fff",secondary:draft.color?.secondary||"#9db0ff",glow:draft.color?.glow||"#7debff",outfit:draft.outfit||"hoodie",accessory:draft.accessory||"star"})}catch{/* ignore invalid device draft */}
+  },[]);
 
   function runCommand() {
     if (!command.trim() || running) return;
@@ -44,8 +53,8 @@ export default function Dashboard() {
   }
 
   const content = active === "Home" ? <>
-    <header className="dash-header"><div><span className="dash-eyebrow">Friday, July 10</span><h1>Good afternoon, Trainer.</h1><p>Orbit is awake, updated, and ready to help.</p></div><div className="dash-header-actions"><button aria-label="Notifications">◌</button><div className="dash-profile">KG</div></div></header>
-    <section className="dash-hero-card"><div className="dash-orbit"><span/><span/><span/></div><div className={`dash-pet-wrap ${running ? "working" : ""}`}><MiniPet/></div><div className="dash-hero-copy"><div className="dash-status"><i/> ORBIT · ONLINE</div><h2>What should we do<br/>together?</h2><p>Nook will explain each step and pause before anything important.</p></div><div className="dash-command"><label htmlFor="dashboard-command">Ask Orbit</label><div><span>✦</span><input id="dashboard-command" value={command} onChange={(e)=>setCommand(e.target.value)} onKeyDown={(e)=>e.key === "Enter" && runCommand()}/><button onClick={runCommand} aria-label="Run command">↑</button></div><small aria-live="polite">{message}</small></div></section>
+    <header className="dash-header"><div><span className="dash-eyebrow">NOOK ROOM · PRIVATE PREVIEW</span><h1>{appearance.name}’s ready. What are you working on?</h1><p>Ask for a task, or pick up where you left off.</p></div><div className="dash-header-actions"><a className="dash-closet-link" href="/create">Closet</a><button aria-label="Notifications">◌</button><div className="dash-profile">KG</div></div></header>
+    <section className="dash-hero-card"><div className="dash-orbit"><span/><span/><span/></div><div className={`dash-pet-wrap ${running ? "working" : ""}`}><Nook3D compact name={appearance.name} primary={appearance.primary} secondary={appearance.secondary} faceGlow={appearance.glow} outfit={appearance.outfit} accessory={appearance.accessory} motion={running?"think":message.includes("approval")?"listen":"idle"} message={running?"I’m turning that into a safe plan.":"I’ll show every step before anything changes."}/></div><div className="dash-hero-copy"><div className="dash-status"><i/> {appearance.name.toUpperCase()} IS HERE</div><h2>Ask once.<br/>See every step.</h2><p>The web room is a control center. Screen-wide movement requires Nook Desktop.</p></div><div className="dash-command"><label htmlFor="dashboard-command">Ask {appearance.name} to help with a task</label><div><span>✦</span><input id="dashboard-command" value={command} onChange={(e)=>setCommand(e.target.value)} onKeyDown={(e)=>e.key === "Enter" && runCommand()}/><button onClick={runCommand} aria-label="Run command">↑</button></div><small aria-live="polite">{message}</small></div></section>
     <div className="dash-grid"><section className="dash-panel dash-activity"><div className="dash-panel-title"><div><h3>Recent activity</h3><p>Everything Orbit has prepared or completed.</p></div><button onClick={()=>setActive("Tasks")}>View all →</button></div>{taskLog.slice(0,3).map((task)=><article key={task.title}><span className="task-app">{task.app}</span><div><b>{task.title}</b><small>{task.time}</small></div><em className={task.status === "Completed" ? "complete" : "pending"}>{task.status}</em></article>)}</section><aside className="dash-panel dash-permission-card"><div className="dash-panel-title"><div><h3>Permission pulse</h3><p>Orbit’s current access.</p></div></div><div className="permission-ring"><div><strong>2</strong><small>active</small></div></div><ul><li><i className="on"/> Shared browser tab</li><li><i className="on"/> Chosen folders</li><li><i/> Posting & publishing</li><li><i/> Purchases</li></ul><button onClick={()=>setActive("Permissions")}>Review permissions</button></aside></div>
   </> : active === "Tasks" ? <section className="dash-page"><div className="dash-page-head"><div><span className="dash-eyebrow">Receipts, drafts, and checkpoints</span><h1>Task history</h1><p>See what your companion touched and what still needs you.</p></div><button className="dash-primary" onClick={()=>setActive("Home")}>+ New task</button></div><div className="task-table"><div className="task-table-head"><span>Task</span><span>Status</span><span>When</span><span>Receipt</span></div>{taskLog.map((task)=><div className="task-table-row" key={task.title}><span><i>{task.app}</i><b>{task.title}</b></span><em className={task.status === "Completed" ? "complete" : "pending"}>{task.status}</em><small>{task.time}</small><button>View →</button></div>)}</div></section>
   : active === "Skills" ? <section className="dash-page"><div className="dash-page-head"><div><span className="dash-eyebrow">Inspect before you install</span><h1>Orbit’s skills</h1><p>Every skill declares exactly what it can see and do.</p></div><button className="dash-primary" onClick={()=>setActive("Marketplace")}>Browse skills</button></div><div className="skill-grid">{skillCards.map((skill)=><article className={`skill-card skill-${skill.color}`} key={skill.name}><div className="skill-icon">{skill.name === "Browser Guide" ? "↗" : skill.name === "File Tidy" ? "⌁" : "✎"}</div><span className="skill-badge">{installed.includes(skill.name) ? "Installed" : "Available"}</span><h3>{skill.name}</h3><p>{skill.desc}</p><div><span>Access scope</span><b>{skill.scope}</b></div><button onClick={()=>toggleInstall(skill.name)}>{installed.includes(skill.name) ? "Remove skill" : "Install skill"}</button></article>)}</div></section>

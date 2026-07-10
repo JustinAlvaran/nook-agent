@@ -1,8 +1,13 @@
-# vinext-starter
+# Nook
 
-A clean full-stack starter running on
-[vinext](https://github.com/cloudflare/vinext), with optional Cloudflare D1 and
-Drizzle support.
+Nook is a character-led desktop companion control room: users customize a live 3D pet, install reviewed skills, supervise task plans, approve consequential actions, and receive receipts. This repository contains the public site, interactive onboarding and wardrobe, private product preview, D1 domain schema, and production architecture for the future desktop runtime and creator marketplace.
+
+Start with:
+
+- [`docs/production-architecture.md`](docs/production-architecture.md) — identity, agent runtime, security, marketplace, rollout, and owner inputs.
+- [`docs/mascot-pipeline.md`](docs/mascot-pipeline.md) — GLB rig, animation, wardrobe, performance, and validation contract.
+
+The live web build is an honest product prototype. Cross-application movement and local device actions require the separately signed Nook Desktop runtime described in the architecture document.
 
 ## Prerequisites
 

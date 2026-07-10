@@ -1,0 +1,64 @@
+"use client";
+
+import { useEffect, useMemo, useState } from "react";
+import { LazyNook3D as Nook3D } from "../components/LazyNook3D";
+import type { NookAccessory, NookMotion, NookOutfit } from "../components/Nook3D";
+
+const colors = [
+  { name:"Nook blue", primary:"#617fff", secondary:"#9db0ff", glow:"#7debff" },
+  { name:"Tangerine", primary:"#ff825f", secondary:"#ffb49e", glow:"#ffe283" },
+  { name:"Mint", primary:"#47cfa9", secondary:"#a2ead8", glow:"#87f7ff" },
+  { name:"Grape", primary:"#9a7dff", secondary:"#cbbdff", glow:"#7debff" },
+  { name:"Charcoal", primary:"#3c4354", secondary:"#7c859c", glow:"#80f1ff" },
+];
+const outfits: { id:NookOutfit; name:string; note:string }[] = [
+  { id:"hoodie", name:"Midnight hoodie", note:"Starter · owned" },
+  { id:"varsity", name:"Cloud varsity", note:"Starter · owned" },
+  { id:"utility", name:"Task vest", note:"Free with beta" },
+  { id:"none", name:"Classic shell", note:"Always available" },
+];
+const accessories: { id:NookAccessory; name:string }[] = [
+  { id:"star", name:"Star pin" }, { id:"cap", name:"Focus cap" }, { id:"antenna", name:"Signal antenna" }, { id:"none", name:"No accessory" },
+];
+const personalities = [
+  { id:"calm", name:"Calm guide", desc:"Explains the plan, stays quiet while working, and checks in at key decisions.", motion:"idle" as NookMotion },
+  { id:"quick", name:"Quick helper", desc:"Uses shorter updates and prioritizes speed for familiar, low-risk tasks.", motion:"walk" as NookMotion },
+  { id:"curious", name:"Curious scout", desc:"Suggests options, asks more questions, and celebrates what it learns.", motion:"wave" as NookMotion },
+];
+
+export default function CreateNook() {
+  const [step,setStep]=useState(0);
+  const [name,setName]=useState("Orbit");
+  const [color,setColor]=useState(colors[0]);
+  const [outfit,setOutfit]=useState<NookOutfit>("hoodie");
+  const [accessory,setAccessory]=useState<NookAccessory>("star");
+  const [personality,setPersonality]=useState(personalities[0]);
+  const [notice,setNotice]=useState("");
+  const [saved,setSaved]=useState(false);
+  const message=useMemo(()=>step===0?`Hi, I’m ${name || "your Nook"}.`:step===1?"That look feels like me.":step===2?personality.desc.split(".")[0]+".":"Save me so we can keep learning together.",[step,name,personality]);
+
+  useEffect(()=>{
+    const draft={name,color,outfit,accessory,personality:personality.id};
+    window.localStorage.setItem("nook-creator-draft",JSON.stringify(draft));
+    setSaved(true); const timer=window.setTimeout(()=>setSaved(false),650); return()=>window.clearTimeout(timer);
+  },[name,color,outfit,accessory,personality]);
+
+  function provider(provider:"Google"|"GitHub") {
+    setNotice(`${provider} sign-in is designed and ready to connect. The production OAuth client ID and secret still need to be added by the site owner.`);
+  }
+
+  return <main className="onboard-shell">
+    <header className="onboard-header"><a className="onboard-brand" href="/"><span>›_</span>nook</a><div className="onboard-progress" aria-label={`Step ${step+1} of 4`}><i style={{width:`${((step+1)/4)*100}%`}}/></div><span className="onboard-save">{saved?"Saving this-device draft…":"Draft saved on this device"}</span><a href="/dashboard">Exit setup</a></header>
+    <div className="onboard-layout">
+      <aside className="onboard-steps"><span>CREATE YOUR NOOK</span>{["Meet your Nook","Choose a look","Working style","Save your Nook"].map((item,index)=><button key={item} className={step===index?"active":step>index?"done":""} onClick={()=>setStep(index)}><i>{step>index?"✓":index+1}</i><div><b>{item}</b><small>{index===0?"Name and color":index===1?"Outfit and accessories":index===2?"How they help":"Sign in to keep them"}</small></div></button>)}</aside>
+      <section className="onboard-stage"><div className="room-grid"/><div className="room-shelf"><span/><span/><span/></div><div className="room-window"><i/><i/></div><Nook3D name={name || "Nook"} primary={color.primary} secondary={color.secondary} faceGlow={color.glow} outfit={outfit} accessory={accessory} motion={personality.motion} message={message}/><div className="stage-note"><span>LIVE 3D PREVIEW</span><small>Drag your Nook to move them · use arrow keys for precise placement</small></div></section>
+      <section className="onboard-panel">
+        {step===0&&<><div className="panel-heading"><span>01 · MEET YOUR NOOK</span><h1>Make them yours.</h1><p>This is a live preview. You can change everything later.</p></div><label className="field-label" htmlFor="nook-name">What should we call them?</label><input className="name-field" id="nook-name" maxLength={18} value={name} onChange={(e)=>setName(e.target.value.replace(/[^a-zA-Z0-9 _-]/g,""))}/><div className="field-row"><span className="field-label">Body color</span><small>{color.name}</small></div><div className="color-picks">{colors.map((item)=><button aria-label={item.name} aria-pressed={color.name===item.name} style={{background:item.primary}} className={color.name===item.name?"active":""} key={item.name} onClick={()=>setColor(item)}/>)}</div><div className="tip-card"><span>✦</span><div><b>A color, not a capability</b><p>Appearance never changes what your Nook can access or do.</p></div></div></>}
+        {step===1&&<><div className="panel-heading"><span>02 · CHOOSE A LOOK</span><h1>First outfit.</h1><p>Try on starter wardrobe pieces. Cosmetics never add permissions.</p></div><span className="field-label">Tops</span><div className="wardrobe-list">{outfits.map((item)=><button className={outfit===item.id?"active":""} key={item.id} onClick={()=>setOutfit(item.id)}><i className={`fabric fabric-${item.id}`}/><div><b>{item.name}</b><small>{item.note}</small></div><span>{outfit===item.id?"Wearing":"Try on"}</span></button>)}</div><span className="field-label accessory-label">Accessories</span><div className="accessory-grid">{accessories.map((item)=><button className={accessory===item.id?"active":""} key={item.id} onClick={()=>setAccessory(item.id)}><i>{item.id==="star"?"★":item.id==="cap"?"⌒":item.id==="antenna"?"•":"–"}</i><span>{item.name}</span></button>)}</div></>}
+        {step===2&&<><div className="panel-heading"><span>03 · WORKING STYLE</span><h1>How should {name || "your Nook"} help?</h1><p>Choose a preset with clear behavioral outcomes—not mystery personality scores.</p></div><div className="personality-list">{personalities.map((item)=><button className={personality.id===item.id?"active":""} key={item.id} onClick={()=>setPersonality(item)}><span>{item.id==="calm"?"◡":item.id==="quick"?"↗":"✦"}</span><div><b>{item.name}</b><p>{item.desc}</p></div><i>{personality.id===item.id?"✓":""}</i></button>)}</div><div className="behavior-preview"><b>Example behavior</b><p>{personality.id==="calm"?`“I’ve prepared the Page details. Nothing has been published. Want to review?”`:personality.id==="quick"?`“Draft ready. Review the three fields, then approve or cancel.”`:`“I found two categories that fit. Want to compare them before I prepare the draft?”`}</p></div></>}
+        {step===3&&<><div className="panel-heading"><span>04 · SAVE YOUR NOOK</span><h1>Keep {name || "your Nook"} with you.</h1><p>Sign in to save outfits, skills, task receipts, and future desktop pairings.</p></div><div className="auth-summary"><span style={{background:color.primary}}/><div><b>{name || "My Nook"}</b><small>{personality.name} · {outfits.find((item)=>item.id===outfit)?.name}</small></div><i>Ready to save</i></div><button className="provider-button google" onClick={()=>provider("Google")}><span>G</span>Continue with Google</button><button className="provider-button github" onClick={()=>provider("GitHub")}><span>⌁</span>Continue with GitHub</button><a className="provider-button chatgpt" href="/signin-with-chatgpt?return_to=/dashboard"><span>✦</span>Continue with ChatGPT</a>{notice&&<div className="auth-notice" role="status"><b>Owner setup required</b><p>{notice}</p></div>}<p className="auth-terms">By continuing, you agree to the Terms and acknowledge the Privacy Policy. OAuth passwords are entered only on the provider’s page—Nook never sees or stores them.</p></>}
+        <div className="onboard-actions"><button className="back-button" onClick={()=>setStep(Math.max(0,step-1))} disabled={step===0}>Back</button>{step<3?<button className="next-button" onClick={()=>setStep(step+1)}>Continue <span>→</span></button>:<a className="next-button" href="/dashboard">Preview my room <span>→</span></a>}</div>
+      </section>
+    </div>
+  </main>;
+}

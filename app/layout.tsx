@@ -10,21 +10,21 @@ export async function generateMetadata(): Promise<Metadata> {
 
   return {
     metadataBase,
-    title: "Nook — Your trainable desktop companion",
+    title: "Nook — The little agent who lives on your desktop",
     description:
-      "A visible, approval-first desktop pet that helps across your apps — plus a marketplace for creator-built companions and skills.",
+      "Create a visible, teachable desktop companion with live 3D customization, supervised tasks, readable permissions, and creator-built skills.",
     openGraph: {
-      title: "Nook — Ask your pet. Watch it get done.",
+      title: "Nook — Meet the little agent who lives on your desktop.",
       description:
-        "Trainable desktop companions, visible automations, and a creator marketplace.",
+        "Create a live 3D Nook, choose an outfit, and supervise every task step.",
       type: "website",
-      images: [{ url: "/og.png", width: 1733, height: 909, alt: "Nook desktop companion" }],
+      images: [{ url: "/og-v2.png", width: 1733, height: 909, alt: "Nook desktop companion in a midnight hoodie" }],
     },
     twitter: {
       card: "summary_large_image",
-      title: "Nook — Your trainable desktop companion",
-      description: "Ask your pet. Watch it get done.",
-      images: ["/og.png"],
+      title: "Nook — Meet the little agent who lives on your desktop.",
+      description: "Create a live 3D Nook and supervise every task step.",
+      images: ["/og-v2.png"],
     },
   };
 }
