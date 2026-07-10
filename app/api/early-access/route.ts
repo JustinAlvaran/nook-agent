@@ -25,10 +25,14 @@ function databaseErrorMessage(error: unknown) {
     return "Early access signups are not available yet.";
   }
 
-  return message;
+  return "Early access signup is temporarily unavailable.";
 }
 
 export async function POST(request: Request) {
+  const contentLength = Number(request.headers.get("content-length") || "0");
+  if (contentLength > 4096) {
+    return Response.json({ error: "Request body is too large." }, { status: 413 });
+  }
   let payload: EarlyAccessPayload;
 
   try {
