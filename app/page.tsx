@@ -66,7 +66,7 @@ export default function Home() {
   return <main id="top">
     <nav className="nav shell" aria-label="Main navigation">
       <Brand/><div className="nav-links"><a href="#how">How it works</a><a href="#marketplace">Marketplace</a><a href="#creators">For creators</a><a href="#pricing">Pricing</a></div>
-      <button className="button button-small button-outline" onClick={() => setModal("access")}>Get Nook</button>
+      <a className="button button-small button-outline" href="/dashboard">Launch demo</a>
     </nav>
 
     <section className="hero shell">
