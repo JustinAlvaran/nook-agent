@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { LazyNook3D as Nook3D } from "../components/LazyNook3D";
 import type { NookAccessory, NookMotion, NookOutfit } from "../components/Nook3D";
+import { createSupabaseBrowserClient } from "../../lib/supabase/client";
 
 const colors = [
   { name:"Nook blue", primary:"#617fff", secondary:"#9db0ff", glow:"#7debff" },
@@ -62,8 +63,18 @@ export default function CreateNook() {
     setSaved(true); const timer=window.setTimeout(()=>setSaved(false),650); return()=>window.clearTimeout(timer);
   },[hydrated,name,color,outfit,accessory,personality]);
 
-  function provider(provider:"Google"|"GitHub") {
-    setNotice(`${provider} sign-in is designed and ready to connect. The production OAuth client ID and secret still need to be added by the site owner.`);
+  async function provider(provider:"Google"|"GitHub") {
+    setNotice(`Opening ${provider} securely…`);
+    try {
+      const supabase = createSupabaseBrowserClient();
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: provider.toLowerCase() as "google" | "github",
+        options: { redirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent("/create?save=1")}` },
+      });
+      if (error) throw error;
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : `${provider} sign-in could not start.`);
+    }
   }
 
   async function saveToAccount() {
@@ -71,7 +82,7 @@ export default function CreateNook() {
     setSavingAccount(true);setNotice("Saving your Nook securely...");
     try{
       const response=await fetch("/api/nooks",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({name,primary:color.primary,secondary:color.secondary,faceGlow:color.glow,outfit,accessory,workingStyle:personality.id})});
-      if(response.status===401){window.location.href="/signin-with-chatgpt?return_to=/create?save=1";return;}
+      if(response.status===401){window.location.href="/auth/sign-in?next=/create?save=1";return;}
       const result=await response.json() as { error?: string };
       if(!response.ok)throw new Error(result.error||"Could not save your Nook.");
       setNotice(`${name || "Your Nook"} is saved to your account.`);

@@ -2,8 +2,21 @@ import { eq } from "drizzle-orm";
 import { getChatGPTUser } from "../../app/chatgpt-auth";
 import { getDb } from "../../db";
 import { nooks, profiles } from "../../db/schema";
+import { createSupabaseServerClient } from "../supabase/server";
 
 export async function getServerIdentity() {
+  const supabase = await createSupabaseServerClient();
+  if (supabase) {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (user?.email) {
+      const metadata = user.user_metadata as Record<string, unknown>;
+      const displayName = typeof metadata.full_name === "string"
+        ? metadata.full_name
+        : typeof metadata.name === "string" ? metadata.name : user.email.split("@")[0];
+      return { email: user.email, displayName, imageUrl: typeof metadata.avatar_url === "string" ? metadata.avatar_url : null, userId: `supabase_${user.id}` };
+    }
+  }
+
   const user = await getChatGPTUser();
   if (!user) return null;
   const bytes = new TextEncoder().encode(user.email.trim().toLowerCase());
