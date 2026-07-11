@@ -1,4 +1,4 @@
-import type { RiskClass, TaskPlan } from "./contracts";
+import type { ActionEnvelope, PolicyDecision, RiskClass, TaskPlan } from "./contracts";
 
 const BLOCKED = [
   /\b(?:steal|harvest|reveal)\b.{0,28}\b(?:password|cookie|credential|token|recovery code)\b/i,
@@ -43,5 +43,31 @@ export function enforcePolicy(input: string, proposed: TaskPlan): TaskPlan {
       id: `step_${index + 1}`,
       requiresApproval: step.kind === "external_effect" || step.requiresApproval,
     })),
+  };
+}
+
+const BLOCKED_ACTION_TYPES = new Set(["credential.read", "captcha.bypass", "bank.transfer", "shell.execute"]);
+
+/** Deterministic authorization floor applied after any model proposal. */
+export function evaluateActionPolicy(action: ActionEnvelope): PolicyDecision {
+  if (BLOCKED_ACTION_TYPES.has(action.actionType)) {
+    return {
+      effectiveRisk: 3,
+      blocked: true,
+      blockedReason: `Action type ${action.actionType} is prohibited`,
+      requiresApproval: false,
+      requiresFreshAuth: false,
+    };
+  }
+
+  let policyRisk: RiskClass = action.externalEffect ? 2 : action.connector === "internal" ? 0 : 1;
+  if (!action.reversible || action.estimatedCostCents > 0 || /(?:publish|delete|permission|account|purchase)/i.test(action.actionType)) policyRisk = 3;
+  const effectiveRisk = Math.max(action.requestedRisk, policyRisk) as RiskClass;
+  return {
+    effectiveRisk,
+    blocked: false,
+    blockedReason: "",
+    requiresApproval: effectiveRisk >= 2,
+    requiresFreshAuth: effectiveRisk >= 3,
   };
 }

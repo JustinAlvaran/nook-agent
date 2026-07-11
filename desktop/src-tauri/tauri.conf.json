@@ -1,0 +1,28 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Nook Desktop",
+  "version": "0.0.0",
+  "identifier": "com.nooklabs.desktop",
+  "build": {
+    "frontendDist": "../placeholder"
+  },
+  "app": {
+    "security": {
+      "csp": "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; connect-src 'none'"
+    },
+    "windows": [
+      {
+        "label": "nook",
+        "title": "Nook Desktop — coming later",
+        "width": 420,
+        "height": 560,
+        "resizable": true,
+        "fullscreen": false
+      }
+    ]
+  },
+  "bundle": {
+    "active": false,
+    "targets": ["msi", "nsis"]
+  }
+}

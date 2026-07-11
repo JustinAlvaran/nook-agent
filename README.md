@@ -1,6 +1,6 @@
 # Nook
 
-Nook is a character-led desktop companion control room: users customize a live 3D pet, install reviewed skills, supervise task plans, approve consequential actions, and receive receipts. This repository contains the public site, interactive onboarding and wardrobe, private product preview, D1 domain schema, and production architecture for the future desktop runtime and creator marketplace.
+Nook is a character-led agent control room: users customize a live 3D pet, create durable task plans, approve hash-bound consequential actions, inspect receipts, pair a Windows companion, and browse a curated catalog. Supabase is the system of record; Cloudflare hosts the web control plane and the simulator-safe workflow foundation.
 
 Start with:
 
@@ -26,11 +26,11 @@ This starter does not use `wrangler.jsonc`.
 ## Included Shape
 
 - edit site code under `app/`
-- `.openai/hosting.json` declares optional Sites D1 and R2 bindings
+- `.openai/hosting.json` declares the Sites project and R2 artifact binding; D1 is disabled
 - `vite.config.ts` simulates declared bindings for local development
-- `db/schema.ts` starts intentionally empty
-- `examples/d1/` contains an optional D1 example surface
-- `drizzle.config.ts` supports local migration generation when needed
+- `supabase/migrations/` contains the authoritative Postgres, RLS, connector, device, and marketplace schema
+- `lib/agent/` contains the OpenAI Agents SDK manager, approval contracts, simulator, retries, and receipts
+- `desktop/` contains the Windows-first Tauri safety scaffold
 
 ## Workspace Auth Headers
 

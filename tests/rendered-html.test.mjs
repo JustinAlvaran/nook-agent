@@ -20,15 +20,20 @@ test("the finished Nook landing replaces the starter", async () => {
 test("creator and control room use real account APIs", async () => {
   const [creator, dashboard, taskRoute, nookRoute] = await Promise.all([
     read("../app/create/page.tsx"),
-    read("../app/dashboard/page.tsx"),
+    read("../app/dashboard/DashboardClient.tsx"),
     read("../app/api/tasks/route.ts"),
     read("../app/api/nooks/route.ts"),
   ]);
-  assert.match(creator, /Save with ChatGPT/);
+  assert.match(creator, /Continue with Google/);
+  assert.match(creator, /Continue with GitHub/);
   assert.match(creator, /fetch\("\/api\/nooks"/);
   assert.match(dashboard, /fetch\("\/api\/tasks"/);
+  assert.match(dashboard, /decideApproval/);
+  assert.match(dashboard, /api\/integrations\/google/);
   assert.match(taskRoute, /createTaskPlan/);
+  assert.match(taskRoute, /nook_create_planned_task/);
   assert.match(taskRoute, /getServerIdentity/);
   assert.match(nookRoute, /getServerIdentity/);
+  assert.doesNotMatch(taskRoute + nookRoute, /getDb|drizzle-orm/);
   assert.doesNotMatch(dashboard, /setTimeout\(\(\) => setMessage/);
 });

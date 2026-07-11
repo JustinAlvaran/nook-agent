@@ -9,20 +9,25 @@
     "dev": "vinext dev",
     "build": "vinext build",
     "start": "vinext start",
-    "test": "npm run build && node --test tests/rendered-html.test.mjs",
+    "test": "npm run build && node --test",
+    "typecheck": "tsc --noEmit --pretty false",
     "lint": "eslint . --ignore-pattern dist --ignore-pattern .next",
     "db:generate": "drizzle-kit generate"
   },
   "dependencies": {
+    "@openai/agents": "^0.13.2",
     "@react-three/fiber": "^9.6.1",
     "@supabase/ssr": "0.12.0",
     "@supabase/supabase-js": "2.110.2",
     "drizzle-orm": "0.45.2",
-    "next": "16.2.6",
+    "next": "^16.2.10",
     "openai": "^6.46.0",
+    "postcss": "^8.5.16",
     "react": "19.2.6",
     "react-dom": "19.2.6",
-    "three": "^0.185.1"
+    "three": "^0.185.1",
+    "ws": "^8.21.0",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "@cloudflare/vite-plugin": "1.37.1",

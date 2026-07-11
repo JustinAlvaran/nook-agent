@@ -1,5 +1,8 @@
 "use client";
 
+/* Landing-page anchors intentionally use native navigation for auth and product entry points. */
+/* eslint-disable @next/next/no-html-link-for-pages */
+
 import { useState } from "react";
 import { LazyNook3D as Nook3D } from "./components/LazyNook3D";
 import type { NookMotion } from "./components/Nook3D";

@@ -5,6 +5,7 @@ import { PointerEvent as ReactPointerEvent, useEffect, useRef, useState } from "
 import * as THREE from "three";
 
 export type NookMotion = "idle" | "listen" | "think" | "walk" | "drag" | "wave" | "success" | "sleep" | "error";
+export type NookAgentState = "ready" | "planning" | "running" | "needs_input" | "needs_approval" | "completed" | "failed" | "blocked" | "offline";
 export type NookOutfit = "none" | "hoodie" | "varsity" | "utility";
 export type NookAccessory = "none" | "cap" | "star" | "antenna";
 
@@ -16,10 +17,23 @@ export type Nook3DProps = {
   outfit?: NookOutfit;
   accessory?: NookAccessory;
   motion?: NookMotion;
+  agentState?: NookAgentState;
   message?: string;
   draggable?: boolean;
   compact?: boolean;
   onPositionChange?: (position: { x: number; y: number }) => void;
+};
+
+export const motionForAgentState: Record<NookAgentState, NookMotion> = {
+  ready: "idle",
+  planning: "think",
+  running: "walk",
+  needs_input: "listen",
+  needs_approval: "listen",
+  completed: "success",
+  failed: "error",
+  blocked: "error",
+  offline: "sleep",
 };
 
 function RobotModel({ primary, secondary, faceGlow, outfit, accessory, motion, reducedMotion }: Required<Pick<Nook3DProps, "primary" | "secondary" | "faceGlow" | "outfit" | "accessory" | "motion">> & { reducedMotion: boolean }) {
@@ -116,7 +130,7 @@ function RobotModel({ primary, secondary, faceGlow, outfit, accessory, motion, r
   </group>;
 }
 
-export function Nook3D({ name="Orbit", primary="#617fff", secondary="#9db0ff", faceGlow="#7debff", outfit="hoodie", accessory="star", motion="idle", message, draggable=true, compact=false, onPositionChange }: Nook3DProps) {
+export function Nook3D({ name="Orbit", primary="#617fff", secondary="#9db0ff", faceGlow="#7debff", outfit="hoodie", accessory="star", motion="idle", agentState, message, draggable=true, compact=false, onPositionChange }: Nook3DProps) {
   const [offset, setOffset] = useState({ x: 0, y: 0 });
   const [dragging, setDragging] = useState(false);
   const start = useRef({ x: 0, y: 0, ox: 0, oy: 0 });
@@ -161,12 +175,14 @@ export function Nook3D({ name="Orbit", primary="#617fff", secondary="#9db0ff", f
     const next={x:Math.max(-150,Math.min(150,offset.x+dx)),y:Math.max(-55,Math.min(70,offset.y+dy))}; setOffset(next); window.localStorage.setItem(positionKey,JSON.stringify(next)); onPositionChange?.(next);
   }
 
-  return <div className={`nook3d ${compact ? "nook3d-compact" : ""} ${dragging ? "is-dragging" : ""}`} style={{ transform:`translate3d(${offset.x}px,${offset.y}px,0)` }}>
+  const resolvedMotion = agentState ? motionForAgentState[agentState] : motion;
+
+  return <div className={`nook3d ${compact ? "nook3d-compact" : ""} ${dragging ? "is-dragging" : ""} nook3d-state-${agentState ?? "ready"}`} style={{ transform:`translate3d(${offset.x}px,${offset.y}px,0)` }}>
     {message && <div className="nook3d-bubble" role="status" aria-live="polite"><b>{name}</b><span>{message}</span></div>}
-    <div className="nook3d-canvas" role={draggable ? "group" : "img"} aria-label={`${name}, your customizable Nook companion. ${dragging ? "Being repositioned." : `Current motion: ${motion}.`}`} tabIndex={draggable ? 0 : -1} onPointerDown={pointerDown} onPointerMove={pointerMove} onPointerUp={pointerUp} onPointerCancel={pointerUp} onKeyDown={(event)=>{if(!event.key.startsWith("Arrow"))return;event.preventDefault();const step=event.shiftKey?24:8;if(event.key==="ArrowLeft")moveBy(-step,0);if(event.key==="ArrowRight")moveBy(step,0);if(event.key==="ArrowUp")moveBy(0,-step);if(event.key==="ArrowDown")moveBy(0,step)}}>
+    <div className="nook3d-canvas" role={draggable ? "group" : "img"} aria-label={`${name}, your customizable Nook companion. ${dragging ? "Being repositioned." : `Current state: ${agentState ?? resolvedMotion}.`}`} tabIndex={draggable ? 0 : -1} onPointerDown={pointerDown} onPointerMove={pointerMove} onPointerUp={pointerUp} onPointerCancel={pointerUp} onKeyDown={(event)=>{if(!event.key.startsWith("Arrow"))return;event.preventDefault();const step=event.shiftKey?24:8;if(event.key==="ArrowLeft")moveBy(-step,0);if(event.key==="ArrowRight")moveBy(step,0);if(event.key==="ArrowUp")moveBy(0,-step);if(event.key==="ArrowDown")moveBy(0,step)}}>
       {!webglFailed ? <Canvas orthographic camera={{ position:[0,.1,6], zoom:90 }} dpr={[1,1.5]} gl={{ alpha:true, antialias:true, powerPreference:"high-performance" }} onCreated={({gl})=>gl.domElement.addEventListener("webglcontextlost",()=>setWebglFailed(true),{once:true})}>
         <ambientLight intensity={1.45}/><directionalLight position={[3,4,5]} intensity={2.2}/><directionalLight position={[-3,1,2]} intensity={.7} color="#7d8fff"/>
-        <RobotModel primary={primary} secondary={secondary} faceGlow={faceGlow} outfit={outfit} accessory={accessory} motion={dragging?"drag":motion} reducedMotion={reducedMotion}/>
+        <RobotModel primary={primary} secondary={secondary} faceGlow={faceGlow} outfit={outfit} accessory={accessory} motion={dragging?"drag":resolvedMotion} reducedMotion={reducedMotion}/>
       </Canvas> : <div className="nook3d-fallback"><span>›_</span></div>}
     </div>
     {draggable && <span className="nook3d-drag-hint">Drag me · arrows also work</span>}
