@@ -1,4 +1,4 @@
-import { Runner, RunState } from "@openai/agents";
+import { Runner, RunState, type Model } from "@openai/agents";
 import { sha256 } from "./action";
 import { createRunCheckpoint, type AgentRunCheckpoint, type ApprovalInterruptionDescriptor } from "./checkpoint";
 import type { AgentBudget } from "./contracts";
@@ -24,7 +24,7 @@ async function describeInterruptions(items: readonly SdkInterruption[]): Promise
   }));
 }
 
-export async function startSdkManagerRun(input: string, budget: AgentBudget, options?: { model?: string; sdkVersion?: string }): Promise<StartedSdkRun> {
+export async function startSdkManagerRun(input: string, budget: AgentBudget, options?: { model?: string | Model; sdkVersion?: string }): Promise<StartedSdkRun> {
   const graph = buildNookManagerGraph(options?.model);
   const runner = new Runner();
   const result = await runner.run(graph.manager, input, { maxTurns: budget.maxTurns });
@@ -45,14 +45,14 @@ export async function startSdkManagerRun(input: string, budget: AgentBudget, opt
 }
 
 /** Rebuild the exact graph version before applying stored approval decisions. */
-export async function restoreSdkRunState(checkpoint: AgentRunCheckpoint, model?: string) {
+export async function restoreSdkRunState(checkpoint: AgentRunCheckpoint, model?: string | Model) {
   const graph = buildNookManagerGraph(model);
   const state = await RunState.fromString(graph.manager, checkpoint.serialized.state);
   return { graph, state };
 }
 
 export class OpenAIAgentsRuntime implements AgentRuntime {
-  constructor(private readonly options?: { model?: string; sdkVersion?: string }) {}
+  constructor(private readonly options?: { model?: string | Model; sdkVersion?: string }) {}
   async run(input: string, budget: AgentBudget): Promise<AgentRunOutcome> {
     return (await startSdkManagerRun(input, budget, this.options)).outcome;
   }

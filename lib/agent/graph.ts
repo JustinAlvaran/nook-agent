@@ -1,4 +1,4 @@
-import { Agent, tool } from "@openai/agents";
+import { Agent, tool, type Model } from "@openai/agents";
 import { z } from "zod";
 import { AGENT_GRAPH_VERSION } from "./contracts";
 
@@ -29,7 +29,7 @@ const requestEffect = tool({
   }),
 });
 
-export function buildNookManagerGraph(model?: string) {
+export function buildNookManagerGraph(model?: string | Model) {
   const research = new Agent({
     name: "Nook Research Specialist",
     model,

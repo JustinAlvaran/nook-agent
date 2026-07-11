@@ -11,7 +11,7 @@ export async function GET(_request: Request, context: Context) {
   const { taskId } = await context.params;
   const supabase = await createSupabaseServerClient();
   if (!supabase) return Response.json({ error: "Task storage is unavailable." }, { status: 503 });
-  const { data, error } = await supabase.from("tasks").select("*, task_steps(*), approvals(*), action_receipts(*)").eq("id", taskId).eq("owner_id", identity.userId).maybeSingle();
+  const { data, error } = await supabase.from("tasks").select("*, task_steps(*), approvals(*), action_receipts(*), task_outputs(*)").eq("id", taskId).eq("owner_id", identity.userId).maybeSingle();
   if (error) return Response.json({ error: "The task could not be loaded." }, { status: 503 });
   if (!data) return Response.json({ error: "Task not found." }, { status: 404 });
   return Response.json({ task: data });

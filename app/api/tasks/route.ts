@@ -17,6 +17,7 @@ function taskResponse(row: Record<string, unknown>) {
     steps: row.task_steps ?? [],
     approvals: row.approvals ?? [],
     receipts: row.action_receipts ?? [],
+    output: Array.isArray(row.task_outputs) ? row.task_outputs[0] ?? null : row.task_outputs ?? null,
   };
 }
 
@@ -27,7 +28,7 @@ export async function GET() {
   if (!supabase) return Response.json({ error: "Task history is unavailable." }, { status: 503 });
   const { data, error } = await supabase
     .from("tasks")
-    .select("*, task_steps(*), approvals(*), action_receipts(*)")
+    .select("*, task_steps(*), approvals(*), action_receipts(*), task_outputs(*)")
     .eq("owner_id", identity.userId)
     .order("created_at", { ascending: false })
     .limit(20);

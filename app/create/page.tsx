@@ -27,6 +27,8 @@ const personalities = [
   { id:"quick", name:"Quick helper", desc:"Uses shorter updates and prioritizes speed for familiar, low-risk tasks.", motion:"walk" as NookMotion },
   { id:"curious", name:"Curious scout", desc:"Suggests options, asks more questions, and celebrates what it learns.", motion:"wave" as NookMotion },
 ];
+type BehaviorSettings={initiative:"low"|"balanced"|"proactive";explanationDepth:"brief"|"clear"|"deep";updateFrequency:"quiet"|"milestones"|"frequent"};
+const presetBehavior:Record<string,BehaviorSettings>={calm:{initiative:"low",explanationDepth:"clear",updateFrequency:"milestones"},quick:{initiative:"balanced",explanationDepth:"brief",updateFrequency:"quiet"},curious:{initiative:"proactive",explanationDepth:"deep",updateFrequency:"frequent"}};
 
 export default function CreateNook() {
   const [step,setStep]=useState(0);
@@ -35,6 +37,7 @@ export default function CreateNook() {
   const [outfit,setOutfit]=useState<NookOutfit>("hoodie");
   const [accessory,setAccessory]=useState<NookAccessory>("star");
   const [personality,setPersonality]=useState(personalities[0]);
+  const [behavior,setBehavior]=useState<BehaviorSettings>(presetBehavior.calm);
   const [notice,setNotice]=useState("");
   const [saved,setSaved]=useState(false);
   const [hydrated,setHydrated]=useState(false);
@@ -52,16 +55,17 @@ export default function CreateNook() {
       if(outfits.some((item)=>item.id===draft.outfit))setOutfit(draft.outfit);
       if(accessories.some((item)=>item.id===draft.accessory))setAccessory(draft.accessory);
       if(savedPersonality)setPersonality(savedPersonality);
+      if(draft.behavior)setBehavior(draft.behavior);
     }catch{/* ignore invalid device draft */}
     setHydrated(true);
   },[]);
 
   useEffect(()=>{
     if(!hydrated)return;
-    const draft={name,color,outfit,accessory,personality:personality.id};
+    const draft={name,color,outfit,accessory,personality:personality.id,behavior};
     window.localStorage.setItem("nook-creator-draft",JSON.stringify(draft));
     setSaved(true); const timer=window.setTimeout(()=>setSaved(false),650); return()=>window.clearTimeout(timer);
-  },[hydrated,name,color,outfit,accessory,personality]);
+  },[hydrated,name,color,outfit,accessory,personality,behavior]);
 
   async function provider(provider:"Google"|"GitHub") {
     setNotice(`Opening ${provider} securely…`);
@@ -81,7 +85,7 @@ export default function CreateNook() {
     if(savingAccount)return;
     setSavingAccount(true);setNotice("Saving your Nook securely...");
     try{
-      const response=await fetch("/api/nooks",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({name,primary:color.primary,secondary:color.secondary,faceGlow:color.glow,outfit,accessory,workingStyle:personality.id})});
+      const response=await fetch("/api/nooks",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({name,primary:color.primary,secondary:color.secondary,faceGlow:color.glow,outfit,accessory,workingStyle:personality.id,...behavior})});
       if(response.status===401){window.location.href="/auth/sign-in?next=/create?save=1";return;}
       const result=await response.json() as { error?: string };
       if(!response.ok)throw new Error(result.error||"Could not save your Nook.");
@@ -105,10 +109,12 @@ export default function CreateNook() {
       <section className="onboard-panel">
         {step===0&&<><div className="panel-heading"><span>01 · MEET YOUR NOOK</span><h1>Make them yours.</h1><p>This is a live preview. You can change everything later.</p></div><label className="field-label" htmlFor="nook-name">What should we call them?</label><input className="name-field" id="nook-name" maxLength={18} value={name} onChange={(e)=>setName(e.target.value.replace(/[^a-zA-Z0-9 _-]/g,""))}/><div className="field-row"><span className="field-label">Body color</span><small>{color.name}</small></div><div className="color-picks">{colors.map((item)=><button aria-label={item.name} aria-pressed={color.name===item.name} style={{background:item.primary}} className={color.name===item.name?"active":""} key={item.name} onClick={()=>setColor(item)}/>)}</div><div className="tip-card"><span>✦</span><div><b>A color, not a capability</b><p>Appearance never changes what your Nook can access or do.</p></div></div></>}
         {step===1&&<><div className="panel-heading"><span>02 · CHOOSE A LOOK</span><h1>First outfit.</h1><p>Try on starter wardrobe pieces. Cosmetics never add permissions.</p></div><span className="field-label">Tops</span><div className="wardrobe-list">{outfits.map((item)=><button aria-pressed={outfit===item.id} className={outfit===item.id?"active":""} key={item.id} onClick={()=>setOutfit(item.id)}><i className={`fabric fabric-${item.id}`}/><div><b>{item.name}</b><small>{item.note}</small></div><span>{outfit===item.id?"Wearing":"Try on"}</span></button>)}</div><span className="field-label accessory-label">Accessories</span><div className="accessory-grid">{accessories.map((item)=><button aria-pressed={accessory===item.id} className={accessory===item.id?"active":""} key={item.id} onClick={()=>setAccessory(item.id)}><i>{item.id==="star"?"★":item.id==="cap"?"⌒":item.id==="antenna"?"•":"–"}</i><span>{item.name}</span></button>)}</div></>}
-        {step===2&&<><div className="panel-heading"><span>03 · WORKING STYLE</span><h1>How should {name || "your Nook"} help?</h1><p>Choose a preset with clear behavioral outcomes—not mystery personality scores.</p></div><div className="personality-list">{personalities.map((item)=><button aria-pressed={personality.id===item.id} className={personality.id===item.id?"active":""} key={item.id} onClick={()=>setPersonality(item)}><span>{item.id==="calm"?"◡":item.id==="quick"?"↗":"✦"}</span><div><b>{item.name}</b><p>{item.desc}</p></div><i>{personality.id===item.id?"✓":""}</i></button>)}</div><div className="behavior-preview"><b>Example behavior</b><p>{personality.id==="calm"?`“I’ve prepared the Page details. Nothing has been published. Want to review?”`:personality.id==="quick"?`“Draft ready. Review the three fields, then approve or cancel.”`:`“I found two categories that fit. Want to compare them before I prepare the draft?”`}</p></div></>}
+        {step===2&&<><div className="panel-heading"><span>03 · WORKING STYLE</span><h1>How should {name || "your Nook"} help?</h1><p>Start with a preset, then tune the three behaviors that actually affect the agent.</p></div><div className="personality-list">{personalities.map((item)=><button aria-pressed={personality.id===item.id} className={personality.id===item.id?"active":""} key={item.id} onClick={()=>{setPersonality(item);setBehavior(presetBehavior[item.id])}}><span>{item.id==="calm"?"□":item.id==="quick"?"↗":"✦"}</span><div><b>{item.name}</b><p>{item.desc}</p></div><i>{personality.id===item.id?"✓":""}</i></button>)}</div><div className="behavior-controls"><BehaviorChoice label="Initiative" value={behavior.initiative} options={["low","balanced","proactive"]} onChange={value=>setBehavior({...behavior,initiative:value as BehaviorSettings["initiative"]})}/><BehaviorChoice label="Explanation" value={behavior.explanationDepth} options={["brief","clear","deep"]} onChange={value=>setBehavior({...behavior,explanationDepth:value as BehaviorSettings["explanationDepth"]})}/><BehaviorChoice label="Updates" value={behavior.updateFrequency} options={["quiet","milestones","frequent"]} onChange={value=>setBehavior({...behavior,updateFrequency:value as BehaviorSettings["updateFrequency"]})}/></div><div className="behavior-preview"><b>Example behavior</b><p>{behavior.initiative==="proactive"?"I made the requested draft and added two optional next steps. Nothing external changed.":behavior.explanationDepth==="brief"?"Draft ready. Here are the three decisions that matter.":"I prepared the work, checked its assumptions, and marked what still needs your decision."}</p></div></>}
         {step===3&&<><div className="panel-heading"><span>04 · SAVE YOUR NOOK</span><h1>Keep {name || "your Nook"} with you.</h1><p>Sign in to save this Nook to one account. Connected services are added separately later.</p></div><div className="auth-summary"><span style={{background:color.primary}}/><div><b>{name || "My Nook"}</b><small>{personality.name} · {outfits.find((item)=>item.id===outfit)?.name}</small></div><i>Device draft ready</i></div><button className="provider-button google" onClick={()=>provider("Google")}><span>G</span>Continue with Google</button><button className="provider-button github" onClick={()=>provider("GitHub")}><span>⌁</span>Continue with GitHub</button><button className="provider-button chatgpt" onClick={saveToAccount} disabled={savingAccount}><span>✦</span>{savingAccount?"Saving…":"Save to my signed-in account"}</button>{notice&&<div className="auth-notice" role="status"><b>Account status</b><p>{notice}</p></div>}<p className="auth-terms">Google and GitHub are used only to sign in. Provider passwords stay on the provider page. Workspace and social connectors are authorized separately.</p></>}
         <div className="onboard-actions"><button className="back-button" onClick={()=>setStep(Math.max(0,step-1))} disabled={step===0}>Back</button>{step<3?<button className="next-button" onClick={()=>setStep(step+1)}>Continue <span>→</span></button>:<button className="next-button" onClick={saveToAccount} disabled={savingAccount}>{savingAccount?"Saving…":"Save and open my room"} <span>→</span></button>}</div>
       </section>
     </div>
   </main>;
 }
+
+function BehaviorChoice({label,value,options,onChange}:{label:string;value:string;options:string[];onChange:(value:string)=>void}){return <fieldset><legend>{label}</legend><div>{options.map(option=><button type="button" key={option} aria-pressed={value===option} className={value===option?"active":""} onClick={()=>onChange(option)}>{option}</button>)}</div></fieldset>}

@@ -5,6 +5,9 @@ const HEX = /^#[0-9a-f]{6}$/i;
 const workingStyles = new Set(["calm", "quick", "curious"]);
 const outfits = new Set(["none", "hoodie", "varsity", "utility"]);
 const accessories = new Set(["none", "cap", "star", "antenna"]);
+const initiatives = new Set(["low", "balanced", "proactive"]);
+const explanationDepths = new Set(["brief", "clear", "deep"]);
+const updateFrequencies = new Set(["quiet", "milestones", "frequent"]);
 
 export const runtime = "edge";
 
@@ -38,6 +41,11 @@ export async function POST(request: Request) {
   const faceGlow = typeof body.faceGlow === "string" && HEX.test(body.faceGlow) ? body.faceGlow : "#7debff";
   const outfit = outfits.has(String(body.outfit)) ? String(body.outfit) : "hoodie";
   const accessory = accessories.has(String(body.accessory)) ? String(body.accessory) : "star";
+  const behaviorSettings = {
+    initiative: initiatives.has(String(body.initiative)) ? String(body.initiative) : "balanced",
+    explanationDepth: explanationDepths.has(String(body.explanationDepth)) ? String(body.explanationDepth) : "clear",
+    updateFrequency: updateFrequencies.has(String(body.updateFrequency)) ? String(body.updateFrequency) : "milestones",
+  };
 
   try {
     const supabase = await createSupabaseServerClient();
@@ -63,6 +71,7 @@ export async function POST(request: Request) {
       .update({
         name: name || "Orbit",
         working_style: workingStyle,
+        behavior_settings: behaviorSettings,
         active_appearance_id: appearance.id,
         appearance_version: nextVersion,
       })

@@ -26,6 +26,7 @@ export async function generateMetadata(): Promise<Metadata> {
       description: "Create a live 3D Nook and supervise every task step.",
       images: ["/og-v2.png"],
     },
+    icons: { icon: "/favicon.svg" },
   };
 }
 

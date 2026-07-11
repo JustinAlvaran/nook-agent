@@ -630,11 +630,63 @@ export type Database = {
           },
         ]
       }
+      nook_memories: {
+        Row: {
+          content: string
+          created_at: string
+          id: string
+          kind: string
+          nook_id: string
+          owner_id: string
+          source: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          content: string
+          created_at?: string
+          id?: string
+          kind: string
+          nook_id: string
+          owner_id: string
+          source?: string
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          content?: string
+          created_at?: string
+          id?: string
+          kind?: string
+          nook_id?: string
+          owner_id?: string
+          source?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "nook_memories_nook_id_fkey"
+            columns: ["nook_id"]
+            isOneToOne: false
+            referencedRelation: "nooks"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "nook_memories_owner_id_fkey"
+            columns: ["owner_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       nooks: {
         Row: {
           active_appearance_id: string | null
           appearance_version: number
           base_species: string
+          behavior_settings: Json
           created_at: string
           id: string
           memory_policy: string
@@ -648,6 +700,7 @@ export type Database = {
           active_appearance_id?: string | null
           appearance_version?: number
           base_species?: string
+          behavior_settings?: Json
           created_at?: string
           id?: string
           memory_policy?: string
@@ -661,6 +714,7 @@ export type Database = {
           active_appearance_id?: string | null
           appearance_version?: number
           base_species?: string
+          behavior_settings?: Json
           created_at?: string
           id?: string
           memory_policy?: string
@@ -1007,6 +1061,66 @@ export type Database = {
         }
         Relationships: []
       }
+      task_outputs: {
+        Row: {
+          created_at: string
+          graph_version: string
+          id: string
+          metadata: Json
+          mode: string
+          model: string
+          owner_id: string
+          prompt_version: string
+          result_markdown: string
+          summary: string
+          task_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          graph_version: string
+          id?: string
+          metadata?: Json
+          mode?: string
+          model: string
+          owner_id: string
+          prompt_version: string
+          result_markdown: string
+          summary: string
+          task_id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          graph_version?: string
+          id?: string
+          metadata?: Json
+          mode?: string
+          model?: string
+          owner_id?: string
+          prompt_version?: string
+          result_markdown?: string
+          summary?: string
+          task_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "task_outputs_owner_id_fkey"
+            columns: ["owner_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "task_outputs_task_id_fkey"
+            columns: ["task_id"]
+            isOneToOne: true
+            referencedRelation: "tasks"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       task_steps: {
         Row: {
           action_hash: string | null
@@ -1062,6 +1176,7 @@ export type Database = {
       }
       tasks: {
         Row: {
+          active_run_mode: string | null
           completed_at: string | null
           created_at: string
           current_step_id: string | null
@@ -1078,6 +1193,7 @@ export type Database = {
           workflow_instance_id: string | null
         }
         Insert: {
+          active_run_mode?: string | null
           completed_at?: string | null
           created_at?: string
           current_step_id?: string | null
@@ -1094,6 +1210,7 @@ export type Database = {
           workflow_instance_id?: string | null
         }
         Update: {
+          active_run_mode?: string | null
           completed_at?: string | null
           created_at?: string
           current_step_id?: string | null
@@ -1183,6 +1300,10 @@ export type Database = {
           task_id: string
         }[]
       }
+      nook_claim_task_run: {
+        Args: { p_task_id: string }
+        Returns: { run_mode: string; task_id: string }[]
+      }
       nook_decide_simulated_approval: {
         Args: {
           p_action_hash: string
@@ -1221,6 +1342,18 @@ export type Database = {
       nook_revoke_google_connection: {
         Args: { p_owner_id: string }
         Returns: undefined
+      }
+      nook_store_task_output: {
+        Args: {
+          p_graph_version: string
+          p_metadata?: Json
+          p_model: string
+          p_prompt_version: string
+          p_result_markdown: string
+          p_summary: string
+          p_task_id: string
+        }
+        Returns: string
       }
       nook_store_google_connection: {
         Args: {
@@ -1376,4 +1509,3 @@ export const Constants = {
     Enums: {},
   },
 } as const
-
