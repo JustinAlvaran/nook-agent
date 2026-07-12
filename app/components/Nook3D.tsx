@@ -136,6 +136,8 @@ export function Nook3D({ name="Orbit", primary="#617fff", secondary="#9db0ff", f
   const start = useRef({ x: 0, y: 0, ox: 0, oy: 0 });
   const [webglFailed, setWebglFailed] = useState(false);
   const [reducedMotion, setReducedMotion] = useState(false);
+  const [motionPaused, setMotionPaused] = useState(false);
+  const [hidden, setHidden] = useState(false);
   const positionKey = `nook-position:${name}:${compact ? "compact" : "room"}`;
 
   useEffect(() => {
@@ -174,17 +176,28 @@ export function Nook3D({ name="Orbit", primary="#617fff", secondary="#9db0ff", f
   function moveBy(dx:number, dy:number) {
     const next={x:Math.max(-150,Math.min(150,offset.x+dx)),y:Math.max(-55,Math.min(70,offset.y+dy))}; setOffset(next); window.localStorage.setItem(positionKey,JSON.stringify(next)); onPositionChange?.(next);
   }
+  function resetPosition() {
+    const next={x:0,y:0};setOffset(next);window.localStorage.removeItem(positionKey);onPositionChange?.(next);
+  }
 
   const resolvedMotion = agentState ? motionForAgentState[agentState] : motion;
 
   return <div className={`nook3d ${compact ? "nook3d-compact" : ""} ${dragging ? "is-dragging" : ""} nook3d-state-${agentState ?? "ready"}`} style={{ transform:`translate3d(${offset.x}px,${offset.y}px,0)` }}>
-    {message && <div className="nook3d-bubble" role="status" aria-live="polite"><b>{name}</b><span>{message}</span></div>}
-    <div className="nook3d-canvas" role={draggable ? "group" : "img"} aria-label={`${name}, your customizable Nook companion. ${dragging ? "Being repositioned." : `Current state: ${agentState ?? resolvedMotion}.`}`} tabIndex={draggable ? 0 : -1} onPointerDown={pointerDown} onPointerMove={pointerMove} onPointerUp={pointerUp} onPointerCancel={pointerUp} onKeyDown={(event)=>{if(!event.key.startsWith("Arrow"))return;event.preventDefault();const step=event.shiftKey?24:8;if(event.key==="ArrowLeft")moveBy(-step,0);if(event.key==="ArrowRight")moveBy(step,0);if(event.key==="ArrowUp")moveBy(0,-step);if(event.key==="ArrowDown")moveBy(0,step)}}>
-      {!webglFailed ? <Canvas orthographic camera={{ position:[0,.1,6], zoom:90 }} dpr={[1,1.5]} gl={{ alpha:true, antialias:true, powerPreference:"high-performance" }} onCreated={({gl})=>gl.domElement.addEventListener("webglcontextlost",()=>setWebglFailed(true),{once:true})}>
+    {!hidden&&message && <div className="nook3d-bubble"><b>{name}</b><span>{message}</span></div>}
+    {!hidden&&<div className="nook3d-canvas" role={draggable ? "group" : "img"} aria-label={`${name}, your customizable Nook companion. ${dragging ? "Being repositioned." : `Current state: ${agentState ?? resolvedMotion}.`}`} tabIndex={draggable ? 0 : -1} onPointerDown={pointerDown} onPointerMove={pointerMove} onPointerUp={pointerUp} onPointerCancel={pointerUp} onKeyDown={(event)=>{if(!event.key.startsWith("Arrow"))return;event.preventDefault();const step=event.shiftKey?24:8;if(event.key==="ArrowLeft")moveBy(-step,0);if(event.key==="ArrowRight")moveBy(step,0);if(event.key==="ArrowUp")moveBy(0,-step);if(event.key==="ArrowDown")moveBy(0,step)}}>
+      {!webglFailed ? <Canvas fallback={<div className="nook3d-fallback"><span>&gt;_</span></div>} orthographic camera={{ position:[0,.1,6], zoom:90 }} dpr={[1,1.5]} gl={{ alpha:true, antialias:true, powerPreference:"high-performance" }} onCreated={({gl})=>gl.domElement.addEventListener("webglcontextlost",()=>setWebglFailed(true),{once:true})}>
         <ambientLight intensity={1.45}/><directionalLight position={[3,4,5]} intensity={2.2}/><directionalLight position={[-3,1,2]} intensity={.7} color="#7d8fff"/>
-        <RobotModel primary={primary} secondary={secondary} faceGlow={faceGlow} outfit={outfit} accessory={accessory} motion={dragging?"drag":resolvedMotion} reducedMotion={reducedMotion}/>
-      </Canvas> : <div className="nook3d-fallback"><span>›_</span></div>}
-    </div>
-    {draggable && <span className="nook3d-drag-hint">Drag me · arrows also work</span>}
+        <RobotModel primary={primary} secondary={secondary} faceGlow={faceGlow} outfit={outfit} accessory={accessory} motion={dragging?"drag":resolvedMotion} reducedMotion={reducedMotion||motionPaused}/>
+      </Canvas> : <div className="nook3d-fallback"><span>&gt;_</span></div>}
+    </div>}
+    {draggable && <div className="nook3d-controls" aria-label={`${name} movement controls`}>
+      <button type="button" onClick={()=>moveBy(-16,0)} aria-label={`Move ${name} left`}>←</button>
+      <button type="button" onClick={()=>moveBy(0,-16)} aria-label={`Move ${name} up`}>↑</button>
+      <button type="button" onClick={()=>moveBy(0,16)} aria-label={`Move ${name} down`}>↓</button>
+      <button type="button" onClick={()=>moveBy(16,0)} aria-label={`Move ${name} right`}>→</button>
+      <button type="button" onClick={resetPosition}>Reset</button>
+      <button type="button" aria-pressed={motionPaused} onClick={()=>setMotionPaused(value=>!value)}>{motionPaused?"Resume motion":"Pause motion"}</button>
+      <button type="button" aria-pressed={hidden} onClick={()=>setHidden(value=>!value)}>{hidden?"Show Nook":"Hide Nook"}</button>
+    </div>}
   </div>;
 }

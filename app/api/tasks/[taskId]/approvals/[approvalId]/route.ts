@@ -1,10 +1,13 @@
 import { getServerIdentity } from "../../../../../../lib/server/identity";
 import { createSupabaseServerClient } from "../../../../../../lib/supabase/server";
+import { rejectCrossSiteMutation } from "../../../../../../lib/server/request-security";
 
 export const runtime = "edge";
 type Context = { params: Promise<{ taskId: string; approvalId: string }> };
 
 export async function POST(request: Request, context: Context) {
+  const rejected = rejectCrossSiteMutation(request);
+  if (rejected) return rejected;
   const identity = await getServerIdentity();
   if (!identity) return Response.json({ error: "Sign in to decide this approval." }, { status: 401 });
   const { taskId, approvalId } = await context.params;
@@ -26,15 +29,9 @@ export async function POST(request: Request, context: Context) {
     .maybeSingle();
   if (readError) return Response.json({ error: "The approval could not be loaded." }, { status: 503 });
   if (!approval || approval.status !== "pending" || approval.action_hash !== actionHash) return Response.json({ error: "This approval is unavailable or has changed." }, { status: 409 });
-  if (Date.parse(approval.expires_at) <= Date.now()) return Response.json({ error: "This approval has expired." }, { status: 410 });
-  if (decision === "approve" && approval.risk_class >= 3) {
-    const { data: { user } } = await supabase.auth.getUser();
-    const lastSignIn = user?.last_sign_in_at ? Date.parse(user.last_sign_in_at) : 0;
-    if (Date.now() - lastSignIn > 10 * 60 * 1000) {
-      return Response.json({ error: "Sign in again before approving this high-risk action.", code: "FRESH_AUTH_REQUIRED" }, { status: 428 });
-    }
-  }
-  const { data, error } = await supabase.rpc("nook_decide_simulated_approval", {
+  if (approval.risk_class >= 2) return Response.json({ error: "This MVP does not authorize external or high-risk effects." }, { status: 409 });
+  const rpc = supabase.rpc as unknown as (name: string, args: Record<string, unknown>) => Promise<{ data: unknown; error: { message: string } | null }>;
+  const { data, error } = await rpc("nook_decide_approval", {
     p_approval_id: approvalId,
     p_action_hash: actionHash,
     p_decision: decision,

@@ -1,4 +1,6 @@
-# Nook production blueprint
+# Nook production blueprint (historical)
+
+> This blueprint predates the Supabase supervised-agent implementation. For current runtime truth use `architecture.md`, `agent-lifecycle.md`, and `tool-registry.md`. Supabase/Postgres is authoritative and D1 is disabled.
 
 This document separates the polished web product from the components required to make Nook a real desktop agent. A hosted website cannot walk across native applications or reuse a person's logged-in browser session by itself.
 
@@ -179,4 +181,3 @@ Upload flow:
 - [Tauri capabilities](https://v2.tauri.app/security/capabilities/)
 - [Chrome extension permissions](https://developer.chrome.com/docs/extensions/develop/concepts/declare-permissions)
 - [OpenAI computer-use safety approach](https://openai.com/index/computer-using-agent/)
-

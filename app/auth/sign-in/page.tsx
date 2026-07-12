@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useState } from "react";
 import { createSupabaseBrowserClient } from "../../../lib/supabase/client";
+import { safeAppPath } from "../../../lib/security/navigation";
 
 export default function SignInPage() {
   const [notice, setNotice] = useState("");
@@ -14,8 +15,7 @@ export default function SignInPage() {
     setNotice(`Opening ${provider === "google" ? "Google" : "GitHub"} securely…`);
     try {
       const search = new URLSearchParams(window.location.search);
-      const requestedNext = search.get("next") ?? "/dashboard";
-      const next = requestedNext.startsWith("/") && !requestedNext.startsWith("//") ? requestedNext : "/dashboard";
+      const next = safeAppPath(search.get("next"));
       const supabase = createSupabaseBrowserClient();
       const { error } = await supabase.auth.signInWithOAuth({
         provider,
@@ -37,7 +37,6 @@ export default function SignInPage() {
       <p>Sign in to save outfits, task plans, approvals, and future desktop pairings.</p>
       <button className="provider-button google" disabled={busy} onClick={() => signIn("google")}><span>G</span>Continue with Google</button>
       <button className="provider-button github" disabled={busy} onClick={() => signIn("github")}><span>⌁</span>Continue with GitHub</button>
-      <a className="nook-auth-chatgpt" href="/signin-with-chatgpt?return_to=/dashboard">Continue with ChatGPT</a>
       {notice && <div className="auth-notice" role="status"><b>Account status</b><p>{notice}</p></div>}
       <small>Nook never sees your provider password. Your provider handles authentication directly.</small>
     </section>

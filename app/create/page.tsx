@@ -28,6 +28,7 @@ const personalities = [
   { id:"curious", name:"Curious scout", desc:"Suggests options, asks more questions, and celebrates what it learns.", motion:"wave" as NookMotion },
 ];
 type BehaviorSettings={initiative:"low"|"balanced"|"proactive";explanationDepth:"brief"|"clear"|"deep";updateFrequency:"quiet"|"milestones"|"frequent"};
+type CreatorDraft={name?:string;color?:{name?:string;primary?:string};primary_color?:string;personality?:string;working_style?:string;outfit?:NookOutfit;outfit_id?:NookOutfit;accessory?:NookAccessory;accessory_ids?:NookAccessory[];behavior?:BehaviorSettings;behavior_settings?:BehaviorSettings};
 const presetBehavior:Record<string,BehaviorSettings>={calm:{initiative:"low",explanationDepth:"clear",updateFrequency:"milestones"},quick:{initiative:"balanced",explanationDepth:"brief",updateFrequency:"quiet"},curious:{initiative:"proactive",explanationDepth:"deep",updateFrequency:"frequent"}};
 
 export default function CreateNook() {
@@ -44,20 +45,29 @@ export default function CreateNook() {
   const [savingAccount,setSavingAccount]=useState(false);
   const message=useMemo(()=>step===0?`Hi, I’m ${name || "your Nook"}.`:step===1?"That look feels like me.":step===2?personality.desc.split(".")[0]+".":"Save me so we can keep learning together.",[step,name,personality]);
 
-  useEffect(()=>{
-    const stored=window.localStorage.getItem("nook-creator-draft");
-    if(stored)try{
-      const draft=JSON.parse(stored);
-      const savedColor=colors.find((item)=>item.name===draft.color?.name)||colors.find((item)=>item.primary===draft.color?.primary);
-      const savedPersonality=personalities.find((item)=>item.id===draft.personality);
+  useEffect(()=>{let cancelled=false;
+    function applyDraft(draft:CreatorDraft){
+      const savedColor=colors.find((item)=>item.name===draft.color?.name)||colors.find((item)=>item.primary===(draft.color?.primary||draft.primary_color));
+      const savedPersonality=personalities.find((item)=>item.id===(draft.personality||draft.working_style));
       if(typeof draft.name==="string")setName(draft.name);
       if(savedColor)setColor(savedColor);
-      if(outfits.some((item)=>item.id===draft.outfit))setOutfit(draft.outfit);
-      if(accessories.some((item)=>item.id===draft.accessory))setAccessory(draft.accessory);
+      if(outfits.some((item)=>item.id===(draft.outfit||draft.outfit_id)))setOutfit(draft.outfit||draft.outfit_id);
+      const savedAccessory=draft.accessory||draft.accessory_ids?.[0]||"none";
+      if(accessories.some((item)=>item.id===savedAccessory))setAccessory(savedAccessory);
       if(savedPersonality)setPersonality(savedPersonality);
-      if(draft.behavior)setBehavior(draft.behavior);
-    }catch{/* ignore invalid device draft */}
-    setHydrated(true);
+      if(draft.behavior||draft.behavior_settings)setBehavior(draft.behavior||draft.behavior_settings);
+    }
+    async function hydrate(){
+      try{
+        const {data:{session}}=await createSupabaseBrowserClient().auth.getSession();
+        if(session){const response=await fetch("/api/nooks");const result=await response.json();
+          if(response.ok&&result.nook&&!cancelled){const versions=result.nook.appearance_versions||[];const active=versions.find((item:{id:string})=>item.id===result.nook.active_appearance_id)||versions.at(-1)||{};applyDraft({...result.nook,...active});setNotice("Loaded the Nook saved to your account.");setHydrated(true);return;}}
+      }catch{/* account storage may be unavailable; device draft remains usable */}
+      const stored=window.localStorage.getItem("nook-creator-draft");
+      if(stored&&!cancelled)try{applyDraft(JSON.parse(stored));}catch{/* ignore invalid device draft */}
+      if(!cancelled)setHydrated(true);
+    }
+    void hydrate();return()=>{cancelled=true};
   },[]);
 
   useEffect(()=>{

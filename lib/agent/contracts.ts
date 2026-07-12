@@ -1,8 +1,8 @@
 export type RiskClass = 0 | 1 | 2 | 3;
 
 /** Bump when a persisted action, approval, receipt, or run-state shape changes. */
-export const AGENT_CONTRACT_VERSION = "nook-agent-contract@1" as const;
-export const AGENT_GRAPH_VERSION = "nook-manager@1" as const;
+export const AGENT_CONTRACT_VERSION = "nook-agent-contract@2" as const;
+export const AGENT_GRAPH_VERSION = "nook-manager@2" as const;
 
 export type TaskStatus =
   | "draft"
@@ -131,8 +131,20 @@ export type PlanStep = {
   title: string;
   detail: string;
   kind: "explain" | "research" | "draft" | "open_link" | "external_effect";
+  mode: "instruction" | "tool";
+  toolName: SafeToolName | null;
+  toolVersion: string | null;
+  toolInput: Record<string, unknown> | null;
+  riskClass: RiskClass;
+  externalEffect: boolean;
   requiresApproval: boolean;
 };
+
+export type SafeToolName =
+  | "create_draft"
+  | "open_supported_url"
+  | "guided_workflow"
+  | "save_nook_preference";
 
 export type TaskPlan = {
   summary: string;

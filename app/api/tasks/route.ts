@@ -3,6 +3,8 @@ import { createApprovalIntent, hashAction } from "../../../lib/agent/action";
 import { MissingOpenAIKeyError, createTaskPlan } from "../../../lib/agent/planner";
 import { evaluateActionPolicy } from "../../../lib/agent/policy";
 import { ensureProfileAndNook, getServerIdentity } from "../../../lib/server/identity";
+import { MissingExecutionSecretError, signServerOperation } from "../../../lib/server/execution-signature";
+import { rejectCrossSiteMutation } from "../../../lib/server/request-security";
 import { createSupabaseServerClient } from "../../../lib/supabase/server";
 import type { Json } from "../../../lib/supabase/database.types";
 
@@ -28,7 +30,7 @@ export async function GET() {
   if (!supabase) return Response.json({ error: "Task history is unavailable." }, { status: 503 });
   const { data, error } = await supabase
     .from("tasks")
-    .select("*, task_steps(*), approvals(*), action_receipts(*), task_outputs(*)")
+    .select("*, task_steps(*), approvals(*), action_receipts(*), task_events(*), task_executions(*), task_outputs(*)")
     .eq("owner_id", identity.userId)
     .order("created_at", { ascending: false })
     .limit(20);
@@ -37,6 +39,8 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
+  const rejected = rejectCrossSiteMutation(request);
+  if (rejected) return rejected;
   const identity = await getServerIdentity();
   if (!identity) return Response.json({ error: "Sign in with Google or GitHub to ask Nook for a plan." }, { status: 401 });
   let body: { input?: unknown; nookName?: unknown };
@@ -50,63 +54,54 @@ export async function POST(request: Request) {
     const plan = await createTaskPlan(input);
     const taskId = crypto.randomUUID();
     const nook = await ensureProfileAndNook(identity, nookName || "Orbit");
-    const persistedSteps = plan.steps.length ? plan.steps : [{ id: "step_1", title: "Stopped at the safety boundary", detail: plan.blockedReason || "The request is blocked by Nook policy.", kind: "explain" as const, requiresApproval: false }];
-    const stepRows = persistedSteps.map((step, ordinal) => ({
-      id: crypto.randomUUID(),
-      ordinal,
-      title: step.title,
-      detail: step.detail,
-      kind: step.kind,
-      status: step.requiresApproval ? "awaiting_approval" : "queued",
-      requires_approval: step.requiresApproval,
-      action_id: null as string | null,
-      action_hash: null as string | null,
-    }));
-
-    const approvalStepIndex = persistedSteps.findIndex((step) => step.requiresApproval || step.kind === "external_effect");
+    const persistedSteps = plan.steps.length ? plan.steps : [{
+      id: "step_1", title: "Stopped at the safety boundary", detail: plan.blockedReason || "The request is blocked by Nook policy.",
+      kind: "explain" as const, mode: "instruction" as const, toolName: null, toolVersion: null, toolInput: null,
+      riskClass: plan.riskClass, externalEffect: false, requiresApproval: false,
+    }];
+    const stepRows = [] as Array<Record<string, Json>>;
     let approval: Json | null = null;
-    if (!plan.blocked && approvalStepIndex >= 0) {
-      const planStep = persistedSteps[approvalStepIndex];
-      const storedStep = stepRows[approvalStepIndex];
+    for (let ordinal = 0; ordinal < persistedSteps.length; ordinal += 1) {
+      const planStep = persistedSteps[ordinal];
+      const stepId = crypto.randomUUID();
       const envelope: ActionEnvelope = {
         contractVersion: AGENT_CONTRACT_VERSION,
         taskId,
         planVersion: 1,
-        stepId: storedStep.id,
-        actionType: "simulator.preview",
-        connector: "simulator",
-        arguments: { title: planStep.title, detail: planStep.detail, originalRequest: input },
-        externalEffect: true,
+        stepId,
+        actionType: planStep.toolName || "instruction",
+        connector: "internal",
+        arguments: planStep.toolInput || {},
+        externalEffect: planStep.externalEffect,
         reversible: true,
         estimatedCostCents: 0,
-        requestedRisk: plan.riskClass,
+        requestedRisk: planStep.riskClass,
       };
       const action = await hashAction(envelope);
       const policy = evaluateActionPolicy(action);
-      const intent = createApprovalIntent(action, policy, {
-        toolName: "simulator_preview",
-        destinationLabel: "Nook safe simulator",
-        preview: `${planStep.title}: ${planStep.detail}`,
-        expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
-      });
-      storedStep.action_id = action.actionId;
-      storedStep.action_hash = action.actionHash;
-      const approvalId = crypto.randomUUID();
-      approval = {
-        id: approvalId,
-        step_id: storedStep.id,
-        action_id: action.actionId,
-        action_hash: action.actionHash,
-        risk_class: policy.effectiveRisk,
-        intent: { ...intent, id: approvalId },
-        expires_at: intent.expiresAt,
-      };
+      stepRows.push({ id: stepId, ordinal, title: planStep.title, detail: planStep.detail, kind: planStep.kind,
+        status: planStep.requiresApproval ? "awaiting_approval" : "queued", requires_approval: planStep.requiresApproval,
+        action_id: action.actionId, action_hash: action.actionHash, tool_name: planStep.toolName,
+        tool_version: planStep.toolVersion, tool_input: planStep.toolInput });
+      if (!plan.blocked && planStep.requiresApproval) {
+        const intent = createApprovalIntent(action, policy, {
+          toolName: planStep.toolName || "unknown",
+          destinationLabel: "This Nook only",
+          preview: `${planStep.title}: ${planStep.detail}\nExact input: ${JSON.stringify(planStep.toolInput)}`,
+          expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+        });
+        const approvalId = crypto.randomUUID();
+        approval = { id: approvalId, step_id: stepId, action_id: action.actionId, action_hash: action.actionHash,
+          risk_class: policy.effectiveRisk, intent: { ...intent, id: approvalId }, expires_at: intent.expiresAt };
+      }
     }
 
     const status = plan.blocked ? "blocked" : approval ? "awaiting_approval" : "ready";
     const supabase = await createSupabaseServerClient();
     if (!supabase) throw new Error("Supabase is not configured.");
-    const { error } = await supabase.rpc("nook_create_planned_task", {
+    const authorization = await signServerOperation("create_task", identity.userId, taskId);
+    const rpc = supabase.rpc as unknown as (name: string, args: Record<string, unknown>) => Promise<{ error: { message: string } | null }>;
+    const { error } = await rpc("nook_create_supervised_task", {
       p_task_id: taskId,
       p_nook_id: nook.id,
       p_input: input,
@@ -115,12 +110,17 @@ export async function POST(request: Request) {
       p_plan: plan,
       p_steps: stepRows,
       p_approval: approval ?? undefined,
+      p_expires_at: authorization.expiresAt,
+      p_signature: authorization.signature,
     });
     if (error) throw error;
     return Response.json({ task: { id: taskId, input, status, plan, persisted: true, approval } }, { status: 201 });
   } catch (error) {
     if (error instanceof MissingOpenAIKeyError) {
       return Response.json({ error: "Nook's agent key has not been enabled for this environment yet.", code: "OPENAI_KEY_REQUIRED" }, { status: 503 });
+    }
+    if (error instanceof MissingExecutionSecretError) {
+      return Response.json({ error: "Nook's trusted task executor has not been enabled for this environment yet.", code: "EXECUTION_SECRET_REQUIRED" }, { status: 503 });
     }
     console.error("task.plan.failed", error instanceof Error ? error.message : "unknown");
     return Response.json({ error: "Nook could not prepare and save a plan right now." }, { status: 502 });

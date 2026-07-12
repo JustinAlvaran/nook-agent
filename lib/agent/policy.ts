@@ -38,11 +38,7 @@ export function enforcePolicy(input: string, proposed: TaskPlan): TaskPlan {
     requiresApproval,
     blocked: false,
     blockedReason: "",
-    steps: proposed.steps.slice(0, 6).map((step, index) => ({
-      ...step,
-      id: `step_${index + 1}`,
-      requiresApproval: step.kind === "external_effect" || step.requiresApproval,
-    })),
+    steps: proposed.steps,
   };
 }
 
@@ -67,7 +63,7 @@ export function evaluateActionPolicy(action: ActionEnvelope): PolicyDecision {
     effectiveRisk,
     blocked: false,
     blockedReason: "",
-    requiresApproval: effectiveRisk >= 2,
+    requiresApproval: effectiveRisk >= 2 || action.actionType === "save_nook_preference",
     requiresFreshAuth: effectiveRisk >= 3,
   };
 }

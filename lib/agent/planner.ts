@@ -2,6 +2,7 @@ import { Agent, Runner } from "@openai/agents";
 import { z } from "zod";
 import type { TaskPlan } from "./contracts";
 import { enforcePolicy } from "./policy";
+import { compileSafePlan } from "./tools/registry";
 
 const planStepSchema = z.object({
   id: z.string().min(1).max(80),
@@ -42,5 +43,5 @@ export async function createTaskPlan(input: string): Promise<TaskPlan> {
   });
   const result = await new Runner().run(planner, input, { maxTurns: 4 });
   if (!result.finalOutput) throw new Error("Nook returned no plan.");
-  return enforcePolicy(input, result.finalOutput as TaskPlan);
+  return compileSafePlan(input, enforcePolicy(input, result.finalOutput as TaskPlan));
 }

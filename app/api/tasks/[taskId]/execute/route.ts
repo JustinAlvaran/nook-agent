@@ -3,7 +3,6 @@ import { executeTask } from "../../../../../lib/server/execute-task";
 export const runtime = "edge";
 type Context = { params: Promise<{ taskId: string }> };
 
-/** Backward-compatible alias; new clients use /execute. */
 export async function POST(request: Request, context: Context) {
   const { taskId } = await context.params;
   return executeTask(request, taskId);

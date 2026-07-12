@@ -9,7 +9,7 @@ Supabase Auth and Postgres are the sole system of record. Cloudflare Sites serve
 - `catalog_items` is a `security_invoker` projection over published products, versions, listings, prices, and approved preview metadata.
 - Creator packages are declarative assets and manifests. They never contain executable JavaScript, WASM, binaries, or shell code.
 
-The task API writes plans, steps, and a possible approval checkpoint through `nook_create_planned_task`, so a partial plan cannot become visible. `nook_decide_simulated_approval` locks the pending checkpoint, compares the approved action hash, transitions the task and step, and appends a receipt exactly once. Google credential and device-pairing RPCs are executable only by `service_role`; authenticated clients can see connection summaries and their device metadata but never refresh-token ciphertext or device token hashes.
+The supervised task API writes a one-tool plan, step, and possible approval through a short-lived server-signed transaction. `nook_decide_approval` records the user's exact hash-bound decision but never executes. Signed claim/finalize/fail functions own authoritative outputs, events, attempts, and receipts. Google credential and device-pairing RPCs remain separate; authenticated clients can see connection summaries and device metadata but never refresh-token ciphertext or device token hashes.
 
 Client code receives only the Supabase publishable key. The service-role key, connector encryption key, Google client secret, OpenAI key, and payment webhook secrets belong in separate Cloudflare secrets for development, staging, and production. Google login and Google Workspace authorization remain separate consent boundaries.
 
@@ -23,6 +23,6 @@ D1 must not remain a second application database. Before public launch, migrate 
 
 ## Applying and checking
 
-The migration is intentionally local and has not been applied remotely. Apply it first to a disposable local Supabase stack, run `supabase/tests/production_foundation.sql` with `ON_ERROR_STOP=1`, inspect database/security advisors, and only then promote the exact migration through staging to production.
+The foundation migrations were applied to the development Supabase project. Apply new migrations first to a disposable branch when available, run `supabase/tests/production_foundation.sql` with `ON_ERROR_STOP=1`, inspect database/security advisors, and only then promote the exact migration through staging to production.
 
 The migration creates database metadata for uploaded assets but does not create Supabase Storage buckets or their object policies. Add quarantine and published buckets in a later migration once upload limits, canonicalization jobs, retention, and moderation are implemented.

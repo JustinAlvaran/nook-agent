@@ -1,5 +1,6 @@
 import { ensureProfileAndNook, getServerIdentity } from "../../../lib/server/identity";
 import { createSupabaseServerClient } from "../../../lib/supabase/server";
+import { rejectCrossSiteMutation } from "../../../lib/server/request-security";
 
 const HEX = /^#[0-9a-f]{6}$/i;
 const workingStyles = new Set(["calm", "quick", "curious"]);
@@ -28,13 +29,16 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
+  const rejected = rejectCrossSiteMutation(request);
+  if (rejected) return rejected;
   const identity = await getServerIdentity();
   if (!identity) return Response.json({ error: "Sign in with Google or GitHub to save your Nook." }, { status: 401 });
   let body: Record<string, unknown>;
   try { body = await request.json() as Record<string, unknown>; }
   catch { return Response.json({ error: "Request body must be valid JSON." }, { status: 400 }); }
 
-  const name = typeof body.name === "string" ? body.name.trim().slice(0, 24) : "Orbit";
+  const name = typeof body.name === "string" ? body.name.trim() : "Orbit";
+  if (!/^[\p{L}\p{N} _-]{1,24}$/u.test(name)) return Response.json({ error: "Nook's name must be 1-24 letters, numbers, spaces, underscores, or hyphens." }, { status: 400 });
   const workingStyle = workingStyles.has(String(body.workingStyle)) ? String(body.workingStyle) : "calm";
   const primary = typeof body.primary === "string" && HEX.test(body.primary) ? body.primary : "#617fff";
   const secondary = typeof body.secondary === "string" && HEX.test(body.secondary) ? body.secondary : "#9db0ff";
@@ -51,6 +55,18 @@ export async function POST(request: Request) {
     const supabase = await createSupabaseServerClient();
     if (!supabase) throw new Error("Supabase is not configured.");
     const nook = await ensureProfileAndNook(identity, name || "Orbit");
+    const { data: currentAppearance } = await supabase.from("appearance_versions").select("id,primary_color,secondary_color,face_glow,outfit_id,accessory_ids")
+      .eq("nook_id", nook.id).eq("id", nook.active_appearance_id ?? "00000000-0000-0000-0000-000000000000").maybeSingle();
+    const requestedAccessories = accessory === "none" ? [] : [accessory];
+    const appearanceUnchanged = currentAppearance && currentAppearance.primary_color.toLowerCase() === primary.toLowerCase()
+      && currentAppearance.secondary_color.toLowerCase() === secondary.toLowerCase() && currentAppearance.face_glow.toLowerCase() === faceGlow.toLowerCase()
+      && currentAppearance.outfit_id === outfit && JSON.stringify(currentAppearance.accessory_ids) === JSON.stringify(requestedAccessories);
+    if (appearanceUnchanged) {
+      const { data: saved, error: saveError } = await supabase.from("nooks").update({ name, working_style: workingStyle, behavior_settings: behaviorSettings })
+        .eq("id", nook.id).eq("owner_id", identity.userId).select("*").single();
+      if (saveError) throw saveError;
+      return Response.json({ nook: saved, appearance: currentAppearance, appearanceVersionCreated: false });
+    }
     const nextVersion = Number(nook.appearance_version ?? 0) + 1;
     const { data: appearance, error: appearanceError } = await supabase
       .from("appearance_versions")
@@ -80,7 +96,7 @@ export async function POST(request: Request) {
       .select("*")
       .single();
     if (saveError) throw saveError;
-    return Response.json({ nook: saved, appearance });
+    return Response.json({ nook: saved, appearance, appearanceVersionCreated: true });
   } catch (error) {
     console.error("nook.save.failed", error instanceof Error ? error.message : "unknown");
     return Response.json({ error: "Your Nook could not be saved right now." }, { status: 503 });

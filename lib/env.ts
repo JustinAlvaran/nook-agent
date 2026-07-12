@@ -8,6 +8,7 @@ const publicSchema = z.object({
 const serverSchema = publicSchema.extend({
   OPENAI_API_KEY: z.string().min(20).optional(),
   OPENAI_MODEL: z.string().min(1).default("gpt-5.4-mini"),
+  TASK_EXECUTION_SECRET: z.string().min(32).optional(),
   OPENROUTER_API_KEY: z.string().min(20).optional(),
   OPENROUTER_CHAT_MODEL: z.string().min(3).optional(),
   OPENROUTER_SITE_NAME: z.string().min(1).optional(),
@@ -41,6 +42,7 @@ export function getCapabilityReadiness() {
   return {
     supabase: Boolean(env),
     agent: Boolean(env?.OPENAI_API_KEY),
+    taskExecutor: Boolean(env?.TASK_EXECUTION_SECRET),
     modelRouter: Boolean(env?.OPENROUTER_API_KEY && env?.OPENROUTER_CHAT_MODEL),
     workflowAdmin: Boolean(env?.SUPABASE_SERVICE_ROLE_KEY),
     googleWorkspace: Boolean(env?.GOOGLE_WORKSPACE_CLIENT_ID && env?.GOOGLE_WORKSPACE_CLIENT_SECRET && env?.CONNECTOR_TOKEN_ENCRYPTION_KEY),
