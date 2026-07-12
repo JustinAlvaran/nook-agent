@@ -33,7 +33,12 @@ export type StepStatus =
   | "failed"
   | "expired";
 
-export type AgentCapability = "research" | "draft" | "verify" | "connector_read" | "connector_write";
+export type AgentCapability =
+  | "research"
+  | "draft"
+  | "verify"
+  | "connector_read"
+  | "connector_write";
 
 export type AgentBudget = {
   maxTurns: number;
@@ -138,13 +143,17 @@ export type PlanStep = {
   riskClass: RiskClass;
   externalEffect: boolean;
   requiresApproval: boolean;
+  dependsOnStepId?: string | null;
 };
 
 export type SafeToolName =
   | "create_draft"
   | "open_supported_url"
   | "guided_workflow"
-  | "save_nook_preference";
+  | "save_nook_preference"
+  | "search_web"
+  | "summarize_sources"
+  | "propose_memory";
 
 export type TaskPlan = {
   summary: string;
