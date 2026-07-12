@@ -10,6 +10,7 @@ import type {
   NookOutfit,
 } from "../components/Nook3D";
 import { deriveNookMotionSignal } from "../../lib/agent/nook-motion";
+import { decideResearch, perceiveRequest } from "../../lib/agent/brain";
 
 type PlanStep = {
   id: string;
@@ -108,6 +109,27 @@ type CatalogItem = {
   currency: string;
   preview_asset_url?: string | null;
 };
+type ResearchSource = {
+  id: string;
+  title: string;
+  url: string;
+  source_name: string;
+  published_at: string | null;
+  retrieved_at: string;
+  snippet: string;
+};
+type ResearchRun = {
+  id: string;
+  query: string;
+  status: string;
+  searched_at: string;
+  research_sources: ResearchSource[];
+};
+type MemoryUsage = {
+  reason: string;
+  created_at: string;
+  nook_memories: { id: string; kind: string; content: string } | null;
+};
 
 const sections = [
   { id: "home", label: "Room", icon: "⌂" },
@@ -187,6 +209,10 @@ export default function DashboardClient() {
     ? routeSection
     : "home";
   const [command, setCommand] = useState("");
+  const [clarification, setClarification] = useState<string[]>([]);
+  const [clarificationAnswer, setClarificationAnswer] = useState("");
+  const [clarified, setClarified] = useState(false);
+  const [brainOpen, setBrainOpen] = useState(true);
   const [agentState, setAgentState] = useState<NookAgentState>("ready");
   const [status, setStatus] = useState("Ready for a new task");
   const [livePlan, setLivePlan] = useState<LivePlan | null>(null);
@@ -202,6 +228,8 @@ export default function DashboardClient() {
     "Loading real task history…",
   );
   const [selectedTask, setSelectedTask] = useState<TaskRecord | null>(null);
+  const [taskResearch, setTaskResearch] = useState<ResearchRun[]>([]);
+  const [taskMemories, setTaskMemories] = useState<MemoryUsage[]>([]);
   const [memories, setMemories] = useState<Memory[] | null>(null);
   const [memoryKind, setMemoryKind] = useState<Memory["kind"]>("preference");
   const [memoryText, setMemoryText] = useState("");
@@ -231,6 +259,11 @@ export default function DashboardClient() {
         livePlan?.steps.find((step) => step.mode === "tool")?.toolName,
       ),
     [agentState, livePlan],
+  );
+  const perception = useMemo(() => perceiveRequest(command), [command]);
+  const researchDecision = useMemo(
+    () => decideResearch(perception),
+    [perception],
   );
 
   useEffect(() => {
@@ -355,6 +388,14 @@ export default function DashboardClient() {
 
   async function runCommand() {
     if (!command.trim() || busy) return;
+    if (perception.needsClarification && !clarified) {
+      setClarification(perception.missingInformation);
+      setAgentState("needs_input");
+      setStatus(
+        "I need a few real details before I can make a trustworthy plan.",
+      );
+      return;
+    }
     setBusy(true);
     setAgentState("planning");
     setLivePlan(null);
@@ -408,6 +449,20 @@ export default function DashboardClient() {
     } finally {
       setBusy(false);
     }
+  }
+  function submitClarification() {
+    if (!clarificationAnswer.trim()) return;
+    setCommand(
+      (value) =>
+        `${value}\n\nDetails supplied by the user:\n${clarificationAnswer.trim()}`,
+    );
+    setClarification([]);
+    setClarificationAnswer("");
+    setClarified(true);
+    setAgentState("ready");
+    setStatus(
+      "Thanks. Those details are now part of this task request; nothing has run yet.",
+    );
   }
   async function workTask(taskId = activeTaskId) {
     if (!taskId || busy || activeApproval) return;
@@ -511,13 +566,23 @@ export default function DashboardClient() {
     }
   }
   async function openTask(id: string) {
-    const r = await fetch(`/api/tasks/${id}`);
-    const result = await r.json();
+    const [r, researchResponse, memoryResponse] = await Promise.all([
+      fetch(`/api/tasks/${id}`),
+      fetch(`/api/tasks/${id}/research`),
+      fetch(`/api/tasks/${id}/memories-used`),
+    ]);
+    const [result, researchResult, memoryResult] = await Promise.all([
+      r.json(),
+      researchResponse.json(),
+      memoryResponse.json(),
+    ]);
     if (!r.ok) {
       setStatus(result.error || "Task unavailable.");
       return;
     }
     const task = result.task as TaskRecord;
+    setTaskResearch(researchResponse.ok ? researchResult.research || [] : []);
+    setTaskMemories(memoryResponse.ok ? memoryResult.memoriesUsed || [] : []);
     setSelectedTask(task);
     setActiveTaskId(task.id);
     setLivePlan(task.plan || null);
@@ -808,7 +873,11 @@ export default function DashboardClient() {
           <textarea
             id="nook-command"
             value={command}
-            onChange={(e) => setCommand(e.target.value)}
+            onChange={(e) => {
+              setCommand(e.target.value);
+              setClarified(false);
+              setClarification([]);
+            }}
             placeholder="Draft a launch plan, guide me through a Facebook Page, or make Nook more concise"
             maxLength={1200}
           />
@@ -822,6 +891,82 @@ export default function DashboardClient() {
             {status}
           </p>
         </div>
+      </section>
+      {clarification.length > 0 && (
+        <section className="clarification-card">
+          <div>
+            <span className="surface-label preview">NO GUESSING</span>
+            <h2>I need these details first</h2>
+            <ul>
+              {clarification.map((item) => (
+                <li key={item}>{item}</li>
+              ))}
+            </ul>
+          </div>
+          <textarea
+            value={clarificationAnswer}
+            onChange={(event) => setClarificationAnswer(event.target.value)}
+            placeholder="Add the missing facts here. Nook will use only what you provide."
+            maxLength={1200}
+          />
+          <button
+            onClick={submitClarification}
+            disabled={!clarificationAnswer.trim()}
+          >
+            Use these details
+          </button>
+        </section>
+      )}
+      <section className={`brain-panel ${brainOpen ? "is-open" : ""}`}>
+        <button
+          className="brain-panel-toggle"
+          onClick={() => setBrainOpen((value) => !value)}
+          aria-expanded={brainOpen}
+        >
+          <span>
+            <i />
+            What Nook understands
+          </span>
+          <b>{brainOpen ? "Hide" : "Show"}</b>
+        </button>
+        {brainOpen && (
+          <div className="brain-panel-grid">
+            <article>
+              <small>Intent</small>
+              <b>{perception.probableIntent.replaceAll("_", " ")}</b>
+              <span>
+                {Math.round(perception.confidence * 100)}% request match
+              </span>
+            </article>
+            <article>
+              <small>Current research</small>
+              <b>{researchDecision.required ? "Required" : "Not required"}</b>
+              <span>{researchDecision.reason}</span>
+            </article>
+            <article>
+              <small>Memory</small>
+              <b>{memories?.length ?? 0} active</b>
+              <span>Only approved, relevant memories may be used.</span>
+            </article>
+            <article>
+              <small>External effects</small>
+              <b>None</b>
+              <span>Planning never publishes or changes another service.</span>
+            </article>
+            {livePlan && (
+              <article className="brain-plan-tools">
+                <small>Selected tools</small>
+                <b>
+                  {livePlan.steps
+                    .filter((step) => step.toolName)
+                    .map((step) => step.toolName)
+                    .join(" → ") || "No tool"}
+                </b>
+                <span>Maximum three dependent tool steps.</span>
+              </article>
+            )}
+          </div>
+        )}
       </section>
       {livePlan ? (
         <section
@@ -847,7 +992,16 @@ export default function DashboardClient() {
           {!livePlan.blocked && (
             <div className="worker-track">
               {livePlan.steps.map((step, index) => (
-                <article key={step.id}>
+                <article
+                  key={step.id}
+                  className={
+                    busy
+                      ? "is-running"
+                      : activeOutput
+                        ? "is-complete"
+                        : "is-queued"
+                  }
+                >
                   <span>{index + 1}</span>
                   <div>
                     <b>{step.title}</b>
@@ -858,6 +1012,13 @@ export default function DashboardClient() {
                         : "Instruction only"}
                       {step.requiresApproval ? " · approval required" : ""}
                     </i>
+                    <em>
+                      {busy
+                        ? "Working and checking"
+                        : activeOutput
+                          ? "Verified"
+                          : "Queued"}
+                    </em>
                   </div>
                 </article>
               ))}
@@ -987,6 +1148,52 @@ export default function DashboardClient() {
             <pre>{outputFromTask(selectedTask)?.result_markdown}</pre>
           ) : (
             <p>No verified deliverable has been generated yet.</p>
+          )}
+          {taskMemories.length > 0 && (
+            <section className="task-memory-audit">
+              <span className="surface-label live">MEMORIES USED</span>
+              {taskMemories.map((item) => (
+                <article key={`${item.nook_memories?.id}-${item.created_at}`}>
+                  <b>{item.nook_memories?.kind || "Memory"}</b>
+                  <p>{item.nook_memories?.content}</p>
+                  <small>{item.reason}</small>
+                </article>
+              ))}
+            </section>
+          )}
+          {taskResearch.flatMap((run) => run.research_sources || []).length >
+            0 && (
+            <section className="source-viewer">
+              <header>
+                <span className="surface-label live">SOURCES</span>
+                <b>
+                  {
+                    taskResearch.flatMap((run) => run.research_sources || [])
+                      .length
+                  }{" "}
+                  saved sources
+                </b>
+              </header>
+              {taskResearch
+                .flatMap((run) => run.research_sources || [])
+                .map((source) => (
+                  <article key={source.id}>
+                    <div>
+                      <small>
+                        {source.source_name} ·{" "}
+                        {source.published_at
+                          ? new Date(source.published_at).toLocaleDateString()
+                          : "Publication date unknown"}
+                      </small>
+                      <b>{source.title}</b>
+                      <p>{source.snippet}</p>
+                    </div>
+                    <a href={source.url} target="_blank" rel="noreferrer">
+                      Open source
+                    </a>
+                  </article>
+                ))}
+            </section>
           )}
           {selectedTask.task_events?.length ? (
             <ol className="task-event-list">
