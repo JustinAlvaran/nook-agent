@@ -132,7 +132,7 @@ type MemoryUsage = {
 };
 
 const sections = [
-  { id: "home", label: "Room", icon: "⌂" },
+  { id: "home", label: "Workbench", icon: "⌂" },
   { id: "tasks", label: "Tasks", icon: "✓" },
   { id: "memory", label: "Memory", icon: "◉" },
   { id: "connectors", label: "Connectors", icon: "↗" },
@@ -154,14 +154,26 @@ const starterCommands = [
   {
     label: "Research with sources",
     value: "Research the latest official guidance for my project and give me a cited summary.",
+    capability: "search_web → summarize_sources",
+    detail: "Find current evidence, check dates, and return citations.",
   },
   {
     label: "Draft something",
     value: "Help me draft a concise launch announcement using only the facts I provide.",
+    capability: "create_draft",
+    detail: "Turn supplied facts into a useful deliverable without publishing.",
+  },
+  {
+    label: "Guide a workflow",
+    value: "Guide me step by step through setting up a Facebook Page for my business.",
+    capability: "guided_workflow",
+    detail: "Ask only for missing facts and keep each decision under your control.",
   },
   {
     label: "Teach a preference",
     value: "I want to teach you a working preference: ",
+    capability: "propose_memory",
+    detail: "Propose a preference for review; save it only after approval.",
   },
 ] as const;
 const starterItems = [
@@ -236,7 +248,8 @@ export default function DashboardClient() {
   const [clarification, setClarification] = useState<string[]>([]);
   const [clarificationAnswer, setClarificationAnswer] = useState("");
   const [clarified, setClarified] = useState(false);
-  const [brainOpen, setBrainOpen] = useState(true);
+  const [brainOpen, setBrainOpen] = useState(false);
+  const [activeStepNumber, setActiveStepNumber] = useState<number | null>(null);
   const [agentState, setAgentState] = useState<NookAgentState>("ready");
   const [status, setStatus] = useState("Ready for a new task");
   const [livePlan, setLivePlan] = useState<LivePlan | null>(null);
@@ -441,6 +454,7 @@ export default function DashboardClient() {
     setLivePlan(null);
     setActiveApproval(null);
     setActiveOutput(null);
+    setActiveStepNumber(null);
     setMemorySuggestion(null);
     setStatus("Preparing a truthful, saved plan…");
     try {
@@ -512,6 +526,7 @@ export default function DashboardClient() {
     try {
       let result: Record<string, unknown> | null = null;
       for (let stepNumber = 1; stepNumber <= 3; stepNumber += 1) {
+        setActiveStepNumber(stepNumber);
         setStatus(`Running and verifying step ${stepNumber} of at most 3…`);
         const response = await fetch(`/api/tasks/${taskId}/execute`, {
           method: "POST",
@@ -550,6 +565,7 @@ export default function DashboardClient() {
           ...(items || []),
         ]);
       setAgentState("completed");
+      setActiveStepNumber(null);
       setStatus("Verified result saved with an execution receipt.");
       setHistory((items) =>
         (items || []).map((t) =>
@@ -558,6 +574,7 @@ export default function DashboardClient() {
       );
     } catch (e) {
       setAgentState("failed");
+      setActiveStepNumber(null);
       setStatus(e instanceof Error ? e.message : "The run failed safely.");
     } finally {
       setBusy(false);
@@ -866,15 +883,34 @@ export default function DashboardClient() {
   const room = (
     <>
       <PageHead
-        eyebrow="Nook control room"
-        title={`${appearance.name} is ready to make something useful.`}
-        copy="Request → allowlisted plan → approval when needed → verified receipt."
+        eyebrow="Nook workbench"
+        title="Hand off an outcome. Stay in control of the work."
+        copy={`${appearance.name} turns requests into bounded tasks with visible steps, source checks, approval gates, and saved receipts.`}
         action={
           <Link className="dash-closet-link" href="/dashboard/wardrobe">
             Wardrobe
           </Link>
         }
       />
+      <section className="work-overview" aria-label="Workspace status">
+        <div>
+          <span>Open work</span>
+          <b>{history ? history.filter((task) => !["completed", "failed", "blocked", "cancelled"].includes(task.status)).length : "—"}</b>
+        </div>
+        <div>
+          <span>Needs you</span>
+          <b>{history ? history.filter((task) => ["awaiting_approval", "needs_clarification"].includes(task.status)).length : "—"}</b>
+        </div>
+        <div>
+          <span>Completed</span>
+          <b>{history ? history.filter((task) => task.status === "completed").length : "—"}</b>
+        </div>
+        <div>
+          <span>Approved memory</span>
+          <b>{memories?.length ?? "—"}</b>
+        </div>
+        <Link href="/dashboard/tasks">Open task ledger <span>→</span></Link>
+      </section>
       <section className="cognition-rail" aria-label="Nook cognitive pipeline">
         <div className="cognition-rail-copy">
           <span>Live brain path</span>
@@ -1081,10 +1117,11 @@ export default function DashboardClient() {
                 <article
                   key={step.id}
                   className={
-                    busy
-                      ? "is-running"
-                      : activeOutput
-                        ? "is-complete"
+                    activeOutput ||
+                    (activeStepNumber !== null && index + 1 < activeStepNumber)
+                      ? "is-complete"
+                      : activeStepNumber === index + 1
+                        ? "is-running"
                         : "is-queued"
                   }
                 >
@@ -1099,10 +1136,11 @@ export default function DashboardClient() {
                       {step.requiresApproval ? " · approval required" : ""}
                     </i>
                     <em>
-                      {busy
-                        ? "Working and checking"
-                        : activeOutput
-                          ? "Verified"
+                      {activeOutput ||
+                      (activeStepNumber !== null && index + 1 < activeStepNumber)
+                        ? "Verified"
+                        : activeStepNumber === index + 1
+                          ? "Working and checking"
                           : "Queued"}
                     </em>
                   </div>
@@ -1155,13 +1193,36 @@ export default function DashboardClient() {
           </footer>
         </section>
       ) : (
-        <section className="honest-empty">
-          <span className="surface-label live">READY</span>
-          <h2>No task is active.</h2>
-          <p>
-            Give Nook a concrete outcome. It will show the exact tool and inputs
-            before running.
-          </p>
+        <section className="task-launchpad">
+          <header>
+            <div>
+              <span className="surface-label live">START REAL WORK</span>
+              <h2>Choose an outcome, not an AI trick.</h2>
+            </div>
+            <p>Each route uses a registered capability and produces a saved task record.</p>
+          </header>
+          <div>
+            {starterCommands.map((item, index) => (
+              <button
+                type="button"
+                key={item.label}
+                onClick={() => {
+                  setCommand(item.value);
+                  setClarified(false);
+                  setClarification([]);
+                  document.getElementById("nook-command")?.focus();
+                }}
+              >
+                <i>0{index + 1}</i>
+                <span>
+                  <b>{item.label}</b>
+                  <small>{item.detail}</small>
+                  <em>{item.capability}</em>
+                </span>
+                <strong>→</strong>
+              </button>
+            ))}
+          </div>
         </section>
       )}
       {resultWorkbench}
@@ -1674,7 +1735,7 @@ export default function DashboardClient() {
           <div>
             <b>{appearance.name}</b>
             <span>
-              <i /> Web room
+              <i /> Supervised
             </span>
           </div>
         </div>
