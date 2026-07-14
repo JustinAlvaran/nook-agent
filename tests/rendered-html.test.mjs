@@ -71,3 +71,25 @@ test("supervised tool execution is allowlisted, hash-bound, and receipt-backed",
   assert.doesNotMatch(approval, /nook_decide_simulated_approval/);
   assert.match(authCallback, /safeAppPath/);
 });
+
+test("teaching allocates review-gated memory and motion renders an action-ready room", async () => {
+  const [dashboard, proposalRoute, identity, nook3d, memoryMigration] =
+    await Promise.all([
+      read("../app/dashboard/DashboardClient.tsx"),
+      read("../app/api/memory-proposals/route.ts"),
+      read("../lib/server/identity.ts"),
+      read("../app/components/Nook3D.tsx"),
+      read("../supabase/migrations/20260714162813_controlled_memory_proposals.sql"),
+    ]);
+
+  assert.match(dashboard, /Allocate memory/);
+  assert.match(dashboard, /inactive until you approve/);
+  assert.match(dashboard, /api\/memory-proposals/);
+  assert.match(proposalRoute, /ensureProfileAndNook/);
+  assert.match(proposalRoute, /nook_id: nook\.id/);
+  assert.doesNotMatch(identity, /profiles"\)\.upsert/);
+  assert.match(memoryMigration, /create table public\.memory_proposals/);
+  assert.match(nook3d, /name="memory-rack"/);
+  assert.match(nook3d, /name="source-rack"/);
+  assert.match(nook3d, /sculptRuntime/);
+});

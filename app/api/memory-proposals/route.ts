@@ -1,6 +1,9 @@
 import { validateMemoryContent } from "../../../lib/agent/memory-policy";
 import { rejectCrossSiteMutation } from "../../../lib/server/request-security";
-import { getServerIdentity } from "../../../lib/server/identity";
+import {
+  ensureProfileAndNook,
+  getServerIdentity,
+} from "../../../lib/server/identity";
 import { createSupabaseServerClient } from "../../../lib/supabase/server";
 
 export const runtime = "edge";
@@ -56,6 +59,7 @@ export async function POST(request: Request) {
     content?: unknown;
     reason?: unknown;
     confidence?: unknown;
+    nookName?: unknown;
   };
   try {
     body = (await request.json()) as typeof body;
@@ -94,11 +98,25 @@ export async function POST(request: Request) {
       { error: "Memory proposals are unavailable." },
       { status: 503 },
     );
+  let nook: { id: string };
+  try {
+    nook = await ensureProfileAndNook(
+      identity,
+      typeof body.nookName === "string"
+        ? body.nookName.trim().slice(0, 24) || "Orbit"
+        : "Orbit",
+    );
+  } catch {
+    return Response.json(
+      { error: "Nook could not allocate a memory slot." },
+      { status: 503 },
+    );
+  }
   const { data, error } = await supabase
     .from("memory_proposals")
     .insert({
       owner_id: identity.userId,
-      nook_id: String(body.nookId ?? ""),
+      nook_id: nook.id,
       source_task_id: body.sourceTaskId ? String(body.sourceTaskId) : null,
       kind,
       title,

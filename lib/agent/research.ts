@@ -13,6 +13,10 @@ export type SearchResult = {
   retrievedAt: string;
   snippet: string;
 };
+export type SearchProvider =
+  | "brave"
+  | "openai_web_search"
+  | "github_public_search";
 export function isSafeResearchUrl(raw: string) {
   try {
     const url = new URL(raw);
@@ -98,11 +102,128 @@ export async function researchContentHash(source: SearchResult) {
     (byte) => byte.toString(16).padStart(2, "0"),
   ).join("");
 }
-export async function searchWeb(
-  input: SearchWebInput,
-): Promise<SearchResult[]> {
-  if (!process.env.BRAVE_SEARCH_API_KEY)
+
+export function configuredSearchProvider() {
+  if (process.env.BRAVE_SEARCH_API_KEY) return "brave";
+  if (process.env.OPENAI_API_KEY) return "openai_web_search_or_github";
+  return "github_public_search";
+}
+
+async function searchWithOpenAI(input: SearchWebInput) {
+  if (!process.env.OPENAI_API_KEY)
     throw new Error("SEARCH_PROVIDER_NOT_CONFIGURED");
+  const { default: OpenAI } = await import("openai");
+  const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+  const timeScope =
+    input.freshness === "current"
+      ? "Prioritize sources from the last seven days when the subject is time-sensitive."
+      : input.freshness === "recent"
+        ? "Prefer sources from the last month when the subject is time-sensitive."
+        : "Use the most authoritative available sources regardless of date.";
+  const response = await client.responses.create({
+    model: process.env.OPENAI_MODEL || "gpt-5-mini",
+    input: [
+      "Find authoritative public sources for the following research request.",
+      `Request: ${input.query}`,
+      timeScope,
+      `Return a concise source-backed answer using no more than ${input.maxResults} distinct sources.`,
+    ].join("\n"),
+    tools: [
+      {
+        type: "web_search",
+        search_context_size: "medium",
+        ...(input.allowedDomains?.length
+          ? { filters: { allowed_domains: input.allowedDomains } }
+          : {}),
+      },
+    ],
+    include: ["web_search_call.action.sources"],
+  });
+  const citations: Array<{
+    title?: unknown;
+    url?: unknown;
+    description?: unknown;
+  }> = [];
+  const seen = new Set<string>();
+  for (const item of response.output) {
+    if (item.type !== "message") continue;
+    for (const content of item.content) {
+      if (content.type !== "output_text") continue;
+      for (const annotation of content.annotations) {
+        if (annotation.type !== "url_citation" || seen.has(annotation.url))
+          continue;
+        seen.add(annotation.url);
+        citations.push({
+          title: annotation.title,
+          url: annotation.url,
+          description: content.text
+            .slice(
+              Math.max(0, annotation.start_index - 220),
+              Math.min(content.text.length, annotation.end_index + 220),
+            )
+            .replace(/\s+/g, " ")
+            .trim(),
+        });
+      }
+    }
+  }
+  return citations;
+}
+
+async function searchWithGitHub(input: SearchWebInput) {
+  type GitHubBody = {
+    items?: Array<{
+      full_name?: unknown;
+      html_url?: unknown;
+      description?: unknown;
+      pushed_at?: unknown;
+      stargazers_count?: unknown;
+    }>;
+  };
+  const request = async (query: string) => {
+    const endpoint = new URL("https://api.github.com/search/repositories");
+    endpoint.searchParams.set("q", query);
+    endpoint.searchParams.set("per_page", String(input.maxResults));
+    endpoint.searchParams.set("sort", "stars");
+    endpoint.searchParams.set("order", "desc");
+    const response = await fetch(endpoint, {
+      headers: {
+        Accept: "application/vnd.github+json",
+        "User-Agent": "Nook-Agent",
+        "X-GitHub-Api-Version": "2022-11-28",
+      },
+      signal: AbortSignal.timeout(10000),
+    });
+    if (!response.ok) throw new Error(`GITHUB_SEARCH_${response.status}`);
+    return (await response.json()) as GitHubBody;
+  };
+  let body = await request(input.query);
+  if (!(body.items ?? []).length) {
+    const tokens =
+      input.query.match(/[\p{L}\p{N}.+#-]+/gu)?.filter(
+        (token) =>
+          token.length > 2 &&
+          !/^(?:the|and|for|with|from|research|find|latest|current|repository|github|architecture|character|scene|procedural)$/i.test(
+            token,
+          ),
+      ) ?? [];
+    const simplified = Array.from(
+      new Set(tokens.length > 5 ? [tokens[0], ...tokens.slice(-4)] : tokens),
+    ).join(" ");
+    if (simplified && simplified !== input.query)
+      body = await request(simplified);
+  }
+  return (body.items ?? []).map((item) => ({
+    title: item.full_name,
+    url: item.html_url,
+    page_age: item.pushed_at,
+    description: `${String(item.description ?? "Public GitHub repository")}. ${Number(item.stargazers_count ?? 0).toLocaleString()} stars.`,
+  }));
+}
+
+export async function searchWebWithProvider(
+  input: SearchWebInput,
+): Promise<{ sources: SearchResult[]; provider: SearchProvider }> {
   if (
     input.query.trim().length < 1 ||
     input.query.length > 500 ||
@@ -110,6 +231,22 @@ export async function searchWeb(
     input.maxResults > 10
   )
     throw new Error("INVALID_SEARCH_INPUT");
+  if (!process.env.BRAVE_SEARCH_API_KEY) {
+    if (process.env.OPENAI_API_KEY) {
+      try {
+        const raw = await searchWithOpenAI(input);
+        const sources = normalizeSearchResults(raw, input);
+        if (sources.length) return { sources, provider: "openai_web_search" };
+      } catch {
+        // A public, read-only GitHub search still keeps code and repository research usable.
+      }
+    }
+    const raw = await searchWithGitHub(input);
+    return {
+      sources: normalizeSearchResults(raw, input),
+      provider: "github_public_search",
+    };
+  }
   const endpoint = new URL("https://api.search.brave.com/res/v1/web/search");
   endpoint.searchParams.set("q", input.query);
   endpoint.searchParams.set("count", String(input.maxResults));
@@ -138,5 +275,14 @@ export async function searchWeb(
       }>;
     };
   };
-  return normalizeSearchResults(body.web?.results ?? [], input);
+  return {
+    sources: normalizeSearchResults(body.web?.results ?? [], input),
+    provider: "brave",
+  };
+}
+
+export async function searchWeb(
+  input: SearchWebInput,
+): Promise<SearchResult[]> {
+  return (await searchWebWithProvider(input)).sources;
 }

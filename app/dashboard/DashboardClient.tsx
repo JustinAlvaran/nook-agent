@@ -271,6 +271,8 @@ export default function DashboardClient() {
   const [memoryKind, setMemoryKind] = useState<Memory["kind"]>("preference");
   const [memoryText, setMemoryText] = useState("");
   const [proposals, setProposals] = useState<MemoryProposal[] | null>(null);
+  const [activeTeachingProposal, setActiveTeachingProposal] =
+    useState<MemoryProposal | null>(null);
   const [editingMemory, setEditingMemory] = useState<string | null>(null);
   const [editingMemoryText, setEditingMemoryText] = useState("");
   const [busy, setBusy] = useState(false);
@@ -317,6 +319,13 @@ export default function DashboardClient() {
   const researchDecision = useMemo(
     () => decideResearch(perception),
     [perception],
+  );
+  const teachingContent = useMemo(
+    () =>
+      command
+        .replace(/^I want to teach you a working preference:\s*/i, "")
+        .trim(),
+    [command],
   );
 
   useEffect(() => {
@@ -441,6 +450,48 @@ export default function DashboardClient() {
 
   async function runCommand() {
     if (!command.trim() || busy) return;
+    if (perception.probableIntent === "change_preference") {
+      if (teachingContent.length < 2) {
+        setAgentState("needs_input");
+        setStatus("Finish the preference after the colon so Nook knows exactly what you want taught.");
+        return;
+      }
+      setBusy(true);
+      setAgentState("planning");
+      setStatus("Allocating a controlled memory slot for your review…");
+      try {
+        const response = await fetch("/api/memory-proposals", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            kind: "preference",
+            title: "Working preference",
+            content: teachingContent,
+            reason: "You explicitly taught Nook this working preference.",
+            confidence: 1,
+            nookName: appearance.name,
+          }),
+        });
+        if (response.status === 401) {
+          window.location.href = `/auth/sign-in?next=${encodeURIComponent("/dashboard")}`;
+          return;
+        }
+        const result = await response.json();
+        if (!response.ok || !result.proposal)
+          throw new Error(result.error || "Memory slot could not be allocated.");
+        const proposal = result.proposal as MemoryProposal;
+        setActiveTeachingProposal(proposal);
+        setProposals((items) => [proposal, ...(items || [])]);
+        setAgentState("completed");
+        setStatus("Memory slot allocated. Review it before Nook may use it.");
+      } catch (error) {
+        setAgentState("failed");
+        setStatus(error instanceof Error ? error.message : "Teaching failed safely.");
+      } finally {
+        setBusy(false);
+      }
+      return;
+    }
     if (perception.needsClarification && !clarified) {
       setClarification(perception.missingInformation);
       setAgentState("needs_input");
@@ -769,6 +820,7 @@ export default function DashboardClient() {
       ),
     );
     setMemories(null);
+    if (activeTeachingProposal?.id === id) setActiveTeachingProposal(null);
     setStatus(
       decision === "approve"
         ? "Memory approved and active."
@@ -1004,8 +1056,20 @@ export default function DashboardClient() {
           </div>
           <div>
             <small>{command.length}/1200 · plans and results are saved</small>
-            <button onClick={runCommand} disabled={!command.trim() || busy}>
-              {agentState === "planning" ? "Planning…" : "Prepare plan →"}
+            <button
+              onClick={runCommand}
+              disabled={
+                !command.trim() ||
+                busy ||
+                (perception.probableIntent === "change_preference" &&
+                  teachingContent.length < 2)
+              }
+            >
+              {agentState === "planning"
+                ? "Preparing…"
+                : perception.probableIntent === "change_preference"
+                  ? "Allocate memory →"
+                  : "Prepare plan →"}
             </button>
           </div>
           <p role="status" aria-live="polite">
@@ -1014,6 +1078,23 @@ export default function DashboardClient() {
           </p>
         </div>
       </section>
+      {activeTeachingProposal && (
+        <section className="teaching-allocation" aria-live="polite">
+          <div className="memory-allocation-mark" aria-hidden="true">
+            <span>{Math.min(100, Math.round((activeTeachingProposal.content.length / 500) * 100))}%</span>
+          </div>
+          <div>
+            <span className="surface-label preview">MEMORY SLOT ALLOCATED</span>
+            <h2>{activeTeachingProposal.title}</h2>
+            <p>“{activeTeachingProposal.content}”</p>
+            <small>
+              Stored as a proposal · {activeTeachingProposal.content.length}/500 characters · inactive until you approve
+            </small>
+          </div>
+          <button onClick={() => reviewProposal(activeTeachingProposal.id, "reject")}>Discard</button>
+          <button onClick={() => reviewProposal(activeTeachingProposal.id, "approve")}>Approve memory</button>
+        </section>
+      )}
       {clarification.length > 0 && (
         <section className="clarification-card">
           <div>

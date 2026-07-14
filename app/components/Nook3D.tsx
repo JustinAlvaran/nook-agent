@@ -64,6 +64,156 @@ export const motionForAgentState: Record<NookAgentState, NookMotion> = {
   offline: "sleep",
 };
 
+function TaskRoom({
+  signal,
+  reducedMotion,
+}: {
+  signal: NookMotionSignal;
+  reducedMotion: boolean;
+}) {
+  const roomRoot = useRef<THREE.Group>(null);
+  const sourceRig = useRef<THREE.Group>(null);
+  const memoryRig = useRef<THREE.Group>(null);
+  const actionRig = useRef<THREE.Group>(null);
+  const accent =
+    signal.state === "researching"
+      ? "#66e7ff"
+      : signal.state === "remembering"
+        ? "#c5a9ff"
+        : signal.state === "waiting"
+          ? "#ffc45d"
+          : signal.state === "warning" || signal.state === "error"
+            ? "#f27c70"
+            : signal.state === "presenting" || signal.state === "celebrating"
+              ? "#82efb7"
+              : "#7f8cff";
+
+  useEffect(() => {
+    if (!roomRoot.current) return;
+    roomRoot.current.userData.sculptRuntime = {
+      nodes: {
+        memoryRack: roomRoot.current.getObjectByName("memory-rack"),
+        sourceRack: roomRoot.current.getObjectByName("source-rack"),
+        actionPlinth: roomRoot.current.getObjectByName("action-plinth"),
+        statusRail: roomRoot.current.getObjectByName("status-rail"),
+      },
+      sockets: {
+        nookHome: [0, -1.05, 0.45],
+        memoryFocus: [-2.05, -0.05, 0.05],
+        sourcesFocus: [2.03, 0.1, 0.05],
+      },
+      colliders: {
+        floor: { type: "box", size: [6.4, 0.1, 4.9] },
+        actionPlinth: { type: "cylinder", radius: 1.16, height: 0.35 },
+      },
+    };
+  }, []);
+
+  useFrame(({ clock }, delta) => {
+    const t = clock.getElapsedTime();
+    if (sourceRig.current) {
+      const active = signal.focusTarget === "sources" && !reducedMotion;
+      sourceRig.current.position.y = THREE.MathUtils.lerp(
+        sourceRig.current.position.y,
+        active ? Math.sin(t * 2.2) * 0.035 : 0,
+        Math.min(1, delta * 5),
+      );
+    }
+    if (memoryRig.current) {
+      const active = signal.state === "remembering" && !reducedMotion;
+      memoryRig.current.rotation.y = THREE.MathUtils.lerp(
+        memoryRig.current.rotation.y,
+        active ? Math.sin(t * 1.4) * 0.08 : 0,
+        Math.min(1, delta * 4),
+      );
+    }
+    if (actionRig.current) {
+      const active = signal.state === "working" && !reducedMotion;
+      actionRig.current.position.x = THREE.MathUtils.lerp(
+        actionRig.current.position.x,
+        active ? Math.sin(t * 3) * 0.04 : 0,
+        Math.min(1, delta * 5),
+      );
+    }
+  });
+
+  return (
+    <group ref={roomRoot} name="nook-task-room" position={[0, 0.05, -1.05]}>
+      <mesh position={[0, 0.1, -0.35]} scale={[3.2, 2.2, 0.08]}>
+        <boxGeometry />
+        <meshStandardMaterial color="#171921" roughness={0.82} metalness={0.08} />
+      </mesh>
+      <mesh position={[0, -1.32, 1.1]} rotation={[-Math.PI / 2, 0, 0]} scale={[3.2, 2.45, 1]} receiveShadow>
+        <planeGeometry />
+        <meshStandardMaterial color="#101218" roughness={0.9} metalness={0.05} />
+      </mesh>
+      <gridHelper args={[6.4, 18, "#343846", "#242733"]} position={[0, -1.31, 1.1]} />
+
+      <group ref={memoryRig} name="memory-rack" position={[-2.05, -0.05, 0.05]}>
+        <mesh position={[0, 0, 0]} scale={[0.62, 1.65, 0.22]}>
+          <boxGeometry />
+          <meshStandardMaterial color="#20232d" roughness={0.72} metalness={0.18} />
+        </mesh>
+        {[0.56, 0.05, -0.46].map((y, index) => (
+          <group key={y} position={[0, y, 0.26]}>
+            <mesh scale={[0.43, 0.18, 0.08]}>
+              <boxGeometry />
+              <meshStandardMaterial color={index === 0 && signal.state === "remembering" ? accent : "#353a48"} emissive={accent} emissiveIntensity={index === 0 && signal.state === "remembering" ? 0.55 : 0.03} roughness={0.55} />
+            </mesh>
+            <mesh position={[-0.3, 0, 0.1]} scale={[0.035, 0.05, 0.02]}>
+              <boxGeometry />
+              <meshBasicMaterial color={index === 0 && signal.state === "remembering" ? "#ffffff" : "#747b8e"} />
+            </mesh>
+          </group>
+        ))}
+      </group>
+
+      <group ref={sourceRig} name="source-rack" position={[2.03, 0.1, 0.05]}>
+        {[-0.5, 0, 0.5].map((y, index) => (
+          <group key={y} position={[index === 1 ? -0.1 : 0.05, y, index * 0.06]} rotation={[0, index === 1 ? -0.08 : 0.04, 0]}>
+            <mesh scale={[0.68, 0.34, 0.055]}>
+              <boxGeometry />
+              <meshStandardMaterial color="#f2f0e9" emissive={signal.focusTarget === "sources" ? accent : "#000000"} emissiveIntensity={signal.focusTarget === "sources" ? 0.12 + index * 0.05 : 0} roughness={0.64} />
+            </mesh>
+            <mesh position={[-0.38, 0.1, 0.065]} scale={[0.09, 0.025, 0.01]}>
+              <boxGeometry />
+              <meshBasicMaterial color={signal.focusTarget === "sources" ? accent : "#747b8e"} />
+            </mesh>
+            <mesh position={[0.04, -0.02, 0.065]} scale={[0.42, 0.018, 0.01]}>
+              <boxGeometry />
+              <meshBasicMaterial color="#8a8f9d" />
+            </mesh>
+          </group>
+        ))}
+      </group>
+
+      <group ref={actionRig} name="action-plinth" position={[0, -1.18, 0.45]}>
+        <mesh scale={[1.16, 0.16, 0.72]} castShadow receiveShadow>
+          <cylinderGeometry args={[1, 1.08, 0.35, 48]} />
+          <meshStandardMaterial color="#252936" metalness={0.38} roughness={0.42} />
+        </mesh>
+        <mesh position={[0, 0.18, 0]} scale={[0.86, 0.04, 0.52]}>
+          <cylinderGeometry args={[1, 1, 0.2, 48]} />
+          <meshStandardMaterial color={accent} emissive={accent} emissiveIntensity={signal.state === "idle" ? 0.12 : 0.48} roughness={0.35} />
+        </mesh>
+      </group>
+
+      <group name="status-rail" position={[0, 1.48, -0.18]}>
+        <mesh scale={[1.15, 0.19, 0.05]}>
+          <boxGeometry />
+          <meshStandardMaterial color="#0b0d12" roughness={0.48} metalness={0.25} />
+        </mesh>
+        {[ -0.72, -0.24, 0.24, 0.72 ].map((x, index) => (
+          <mesh key={x} position={[x, 0, 0.065]} scale={[0.12, 0.035, 0.015]}>
+            <boxGeometry />
+            <meshBasicMaterial color={index === 0 || signal.state !== "idle" ? accent : "#4b5060"} />
+          </mesh>
+        ))}
+      </group>
+    </group>
+  );
+}
+
 function RobotModel({
   primary,
   secondary,
@@ -572,7 +722,8 @@ export function Nook3D({
                 </div>
               }
               orthographic
-              camera={{ position: [0, 0.1, 6], zoom: 90 }}
+              shadows
+              camera={{ position: [0, 0.15, 6], zoom: 82 }}
               dpr={[1, 1.5]}
               gl={{
                 alpha: true,
@@ -593,6 +744,11 @@ export function Nook3D({
                 position={[-3, 1, 2]}
                 intensity={0.7}
                 color="#7d8fff"
+              />
+              <pointLight position={[0, -0.4, 2]} intensity={0.55} color={faceGlow} distance={5} />
+              <TaskRoom
+                signal={resolvedSignal}
+                reducedMotion={reducedMotion || motionPaused}
               />
               <RobotModel
                 primary={primary}

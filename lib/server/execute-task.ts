@@ -23,8 +23,9 @@ import { signServerOperation } from "./execution-signature";
 import { rejectCrossSiteMutation } from "./request-security";
 import { validateMemoryContent } from "../agent/memory-policy";
 import {
+  configuredSearchProvider,
   researchContentHash,
-  searchWeb,
+  searchWebWithProvider,
   type SearchWebInput,
 } from "../agent/research";
 
@@ -238,11 +239,14 @@ export async function executeTask(request: Request, taskId: string) {
         owner_id: identity.userId,
         query: String(toolInput.query),
         freshness: String(toolInput.freshness),
-        provider: "brave",
+        provider: configuredSearchProvider(),
         status: "running",
         metadata: {},
       });
-      const sources = await searchWeb(toolInput as SearchWebInput);
+      const searchResult = await searchWebWithProvider(
+        toolInput as SearchWebInput,
+      );
+      const { sources } = searchResult;
       if (!sources.length) {
         await supabase
           .from("research_runs")
@@ -272,6 +276,7 @@ export async function executeTask(request: Request, taskId: string) {
         .from("research_runs")
         .update({
           status: "succeeded",
+          provider: searchResult.provider,
           metadata: { sourceCount: sources.length },
         })
         .eq("id", runId)
@@ -286,7 +291,7 @@ export async function executeTask(request: Request, taskId: string) {
           )
           .join("\n\n"),
         whatChanged: [
-          "Searched through the approved Brave Search API",
+          `Searched through the approved ${searchResult.provider.replaceAll("_", " ")} provider`,
           `Saved ${sources.length} source records with retrieval timestamps`,
         ],
         nextSuggestedAction:

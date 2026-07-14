@@ -103,6 +103,7 @@ test("research security blocks unsafe URLs, enforces domains, and deduplicates",
   );
   assert.equal(results.length, 1);
   assert.equal(results[0].publishedAt, null);
+  assert.equal(research.configuredSearchProvider(), "github_public_search");
 });
 
 test("memory policy rejects secrets and excludes inactive or expired memory", () => {

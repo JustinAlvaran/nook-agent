@@ -21,12 +21,29 @@ export async function getServerIdentity() {
 export async function ensureProfileAndNook(identity: NonNullable<Awaited<ReturnType<typeof getServerIdentity>>>, nookName = "Orbit") {
   const supabase = await createSupabaseServerClient();
   if (!supabase) throw new Error("Supabase is not configured.");
-  const { error: profileError } = await supabase.from("profiles").upsert({
-    id: identity.userId,
-    display_name: identity.displayName,
-    avatar_url: identity.imageUrl,
-    onboarding_state: "active",
-  }, { onConflict: "id" });
+  const { data: existingProfile, error: profileLookupError } = await supabase
+    .from("profiles")
+    .select("id")
+    .eq("id", identity.userId)
+    .maybeSingle();
+  if (profileLookupError) throw profileLookupError;
+
+  const profileWrite = existingProfile
+    ? supabase
+        .from("profiles")
+        .update({
+          display_name: identity.displayName,
+          avatar_url: identity.imageUrl,
+          onboarding_state: "active",
+        })
+        .eq("id", identity.userId)
+    : supabase.from("profiles").insert({
+        id: identity.userId,
+        display_name: identity.displayName,
+        avatar_url: identity.imageUrl,
+        onboarding_state: "active",
+      });
+  const { error: profileError } = await profileWrite;
   if (profileError) throw profileError;
 
   const { data: existing, error: existingError } = await supabase
