@@ -154,7 +154,7 @@ export async function executeTask(request: Request, taskId: string) {
     );
   }
 
-  const rpc = supabase.rpc as unknown as Rpc;
+  const rpc = supabase.rpc.bind(supabase) as unknown as Rpc;
   const claimAuthorization = await signServerOperation(
     "claim_task",
     identity.userId,

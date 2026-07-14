@@ -30,7 +30,7 @@ export async function POST(request: Request, context: Context) {
   if (readError) return Response.json({ error: "The approval could not be loaded." }, { status: 503 });
   if (!approval || approval.status !== "pending" || approval.action_hash !== actionHash) return Response.json({ error: "This approval is unavailable or has changed." }, { status: 409 });
   if (approval.risk_class >= 2) return Response.json({ error: "This MVP does not authorize external or high-risk effects." }, { status: 409 });
-  const rpc = supabase.rpc as unknown as (name: string, args: Record<string, unknown>) => Promise<{ data: unknown; error: { message: string } | null }>;
+  const rpc = supabase.rpc.bind(supabase) as unknown as (name: string, args: Record<string, unknown>) => Promise<{ data: unknown; error: { message: string } | null }>;
   const { data, error } = await rpc("nook_decide_approval", {
     p_approval_id: approvalId,
     p_action_hash: actionHash,

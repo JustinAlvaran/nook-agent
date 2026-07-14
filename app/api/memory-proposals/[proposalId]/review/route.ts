@@ -42,7 +42,7 @@ export async function POST(request: Request, context: Context) {
       { error: "Memory proposals are unavailable." },
       { status: 503 },
     );
-  const rpc = supabase.rpc as unknown as (
+  const rpc = supabase.rpc.bind(supabase) as unknown as (
     name: string,
     args: Record<string, unknown>,
   ) => Promise<{ data: unknown; error: { message: string } | null }>;

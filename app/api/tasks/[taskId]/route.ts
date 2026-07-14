@@ -30,7 +30,7 @@ export async function PATCH(request: Request, context: Context) {
   if (body.action !== "cancel" && body.action !== "retry") return Response.json({ error: "Action must be cancel or retry." }, { status: 400 });
   const supabase = await createSupabaseServerClient();
   if (!supabase) return Response.json({ error: "Task storage is unavailable." }, { status: 503 });
-  const rpc = supabase.rpc as unknown as (name: string, args: Record<string, unknown>) => Promise<{ data: unknown; error: { message: string } | null }>;
+  const rpc = supabase.rpc.bind(supabase) as unknown as (name: string, args: Record<string, unknown>) => Promise<{ data: unknown; error: { message: string } | null }>;
   const { data, error } = await rpc("nook_transition_task", { p_task_id: taskId, p_action: body.action });
   if (error) return Response.json({ error: "The task could not be updated." }, { status: 503 });
   const row = Array.isArray(data) ? data[0] : data;
