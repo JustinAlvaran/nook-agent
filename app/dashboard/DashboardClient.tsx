@@ -140,6 +140,30 @@ const sections = [
   { id: "marketplace", label: "Marketplace", icon: "+" },
   { id: "desktop", label: "Desktop", icon: "▣" },
 ] as const;
+const cognitionStages = [
+  { id: "listen", label: "Listen" },
+  { id: "understand", label: "Understand" },
+  { id: "remember", label: "Recall" },
+  { id: "research", label: "Research" },
+  { id: "plan", label: "Plan" },
+  { id: "work", label: "Act" },
+  { id: "check", label: "Verify" },
+  { id: "present", label: "Present" },
+] as const;
+const starterCommands = [
+  {
+    label: "Research with sources",
+    value: "Research the latest official guidance for my project and give me a cited summary.",
+  },
+  {
+    label: "Draft something",
+    value: "Help me draft a concise launch announcement using only the facts I provide.",
+  },
+  {
+    label: "Teach a preference",
+    value: "I want to teach you a working preference: ",
+  },
+] as const;
 const starterItems = [
   { name: "Midnight hoodie", type: "Top", className: "hoodie" },
   { name: "Star pin", type: "Accessory", className: "star" },
@@ -260,6 +284,22 @@ export default function DashboardClient() {
       ),
     [agentState, livePlan],
   );
+  const cognitionStage = useMemo(() => {
+    const stageByState: Record<string, number> = {
+      listening: 0,
+      asking: 0,
+      understanding: 1,
+      remembering: 2,
+      researching: 3,
+      planning: 4,
+      waiting: 4,
+      working: 5,
+      checking: 6,
+      presenting: 7,
+      celebrating: 7,
+    };
+    return stageByState[motionSignal.state] ?? -1;
+  }, [motionSignal.state]);
   const perception = useMemo(() => perceiveRequest(command), [command]);
   const researchDecision = useMemo(
     () => decideResearch(perception),
@@ -334,7 +374,7 @@ export default function DashboardClient() {
     };
   }, []);
   useEffect(() => {
-    if (section !== "memory" || memories) return;
+    if ((section !== "memory" && section !== "home") || memories) return;
     let cancelled = false;
     void fetch("/api/memories")
       .then(async (r) => {
@@ -835,8 +875,37 @@ export default function DashboardClient() {
           </Link>
         }
       />
+      <section className="cognition-rail" aria-label="Nook cognitive pipeline">
+        <div className="cognition-rail-copy">
+          <span>Live brain path</span>
+          <b>
+            {cognitionStage < 0
+              ? "Waiting for your request"
+              : `${cognitionStages[cognitionStage].label} stage`}
+          </b>
+        </div>
+        <ol>
+          {cognitionStages.map((stage, index) => (
+            <li
+              key={stage.id}
+              className={
+                index === cognitionStage
+                  ? "is-active"
+                  : index < cognitionStage
+                    ? "is-complete"
+                    : ""
+              }
+              aria-current={index === cognitionStage ? "step" : undefined}
+            >
+              <i>{index < cognitionStage ? "✓" : index + 1}</i>
+              <span>{stage.label}</span>
+            </li>
+          ))}
+        </ol>
+      </section>
       <section className="control-room-card">
         <div className={`room-presence focus-${motionSignal.focusTarget}`}>
+          <div className="room-aura" aria-hidden="true"><i /><i /><i /></div>
           <span className={`truth-status status-${agentState}`}>
             <i />
             {motionSignal.state}
@@ -862,11 +931,12 @@ export default function DashboardClient() {
             </span>
           </div>
           <p>
-            Movement reflects saved task state. Nook does not pretend to work
-            while idle.
+            Every movement follows a real task event. Idle means nothing is
+            running.
           </p>
         </div>
         <div className="room-composer">
+          <span className="composer-kicker">Start a supervised task</span>
           <label htmlFor="nook-command">
             What should {appearance.name} help you make or solve?
           </label>
@@ -881,6 +951,21 @@ export default function DashboardClient() {
             placeholder="Draft a launch plan, guide me through a Facebook Page, or make Nook more concise"
             maxLength={1200}
           />
+          <div className="starter-command-list" aria-label="Example requests">
+            {starterCommands.map((item) => (
+              <button
+                key={item.label}
+                type="button"
+                onClick={() => {
+                  setCommand(item.value);
+                  setClarified(false);
+                  setClarification([]);
+                }}
+              >
+                <span>+</span>{item.label}
+              </button>
+            ))}
+          </div>
           <div>
             <small>{command.length}/1200 · plans and results are saved</small>
             <button onClick={runCommand} disabled={!command.trim() || busy}>
@@ -888,6 +973,7 @@ export default function DashboardClient() {
             </button>
           </div>
           <p role="status" aria-live="polite">
+            <i className={`status-pulse status-${agentState}`} />
             {status}
           </p>
         </div>
