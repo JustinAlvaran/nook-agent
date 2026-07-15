@@ -1114,7 +1114,7 @@ export default function DashboardClient() {
     </section>
   );
   const room = (
-    <>
+    <div className="mission-desk">
       <PageHead
         eyebrow="Nook workbench"
         title="Hand off an outcome. Stay in control of the work."
@@ -1174,6 +1174,10 @@ export default function DashboardClient() {
       </section>
       <section className="control-room-card">
         <div className={`room-presence focus-${motionSignal.focusTarget}`}>
+          <div className="presence-console-head">
+            <span>Live Nook</span>
+            <b>{appearance.name} / supervised</b>
+          </div>
           <div className="room-aura" aria-hidden="true"><i /><i /><i /></div>
           <span className={`truth-status status-${agentState}`}>
             <i />
@@ -1199,10 +1203,11 @@ export default function DashboardClient() {
                 : `Focused on ${motionSignal.focusTarget}`}
             </span>
           </div>
-          <p>
-            Every movement follows a real task event. Idle means nothing is
-            running.
-          </p>
+          <div className="presence-hud" aria-label="Nook runtime state">
+            <span><small>Focus</small><b>{motionSignal.focusTarget === "none" ? "Unassigned" : motionSignal.focusTarget}</b></span>
+            <span><small>Policy</small><b>Ask before action</b></span>
+            <span><small>Runtime</small><b>Keyless core</b></span>
+          </div>
         </div>
         <div className="room-composer">
           <span className="composer-kicker">Start a supervised task</span>
@@ -1521,7 +1526,7 @@ export default function DashboardClient() {
         </section>
       )}
       {resultWorkbench}
-    </>
+    </div>
   );
   const tasks = (
     <section className="dash-page">

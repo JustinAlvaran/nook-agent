@@ -7261,3 +7261,438 @@ a {
     width: 100%;
   }
 }
+
+/* Mission Desk — a compact, task-first home for the supervised Nook. */
+.dashboard-shell {
+  grid-template-columns: 224px minmax(0, 1fr);
+  background: #e9e7e1;
+}
+.dash-sidebar {
+  padding: 20px 14px;
+  border-right: 1px solid #d4d0c7;
+  background: #f8f6f1;
+}
+.dash-brand {
+  min-height: 38px;
+  padding-inline: 8px;
+  letter-spacing: -.045em;
+}
+.dash-brand > span,
+.profile-orb {
+  border-radius: 10px;
+  background: #5d6cff;
+  box-shadow: 0 8px 22px #5362f333;
+}
+.dash-pet-profile {
+  margin: 24px 0 18px;
+  padding: 10px;
+  border-radius: 12px;
+  background: #efede7;
+}
+.dash-sidebar nav {
+  gap: 3px;
+}
+.dash-sidebar nav a {
+  min-height: 42px;
+  border: 1px solid transparent;
+  border-radius: 9px;
+  padding-inline: 10px;
+  font-size: 12px;
+}
+.dash-sidebar nav a.active {
+  border-color: #d8d6f7;
+  background: #ecebff;
+}
+.dash-main {
+  padding: 26px clamp(18px, 3vw, 44px) 60px;
+  background:
+    radial-gradient(circle at 86% 0, #5d6cff10, transparent 28%),
+    #e9e7e1;
+}
+.mission-desk {
+  width: min(1460px, 100%);
+  margin-inline: auto;
+}
+.mission-desk .dash-page-head {
+  align-items: center;
+  margin-bottom: 18px;
+  padding: 0;
+}
+.mission-desk .dash-page-head > div {
+  display: block;
+}
+.mission-desk .dash-eyebrow {
+  color: #555ee1;
+  font-size: 9px;
+}
+.mission-desk .dash-page-head h1 {
+  max-width: 760px;
+  margin: 8px 0 0;
+  font-size: clamp(32px, 3.2vw, 48px);
+  line-height: .98;
+  letter-spacing: -.052em;
+}
+.mission-desk .dash-page-head p {
+  max-width: 760px;
+  margin: 10px 0 0;
+  color: #6a665f;
+  font-size: 12px;
+  line-height: 1.45;
+}
+.mission-desk .dash-closet-link {
+  border-color: #cac6bd;
+  background: #f8f6f1;
+}
+.mission-desk .work-overview {
+  min-height: 58px;
+  grid-template-columns: repeat(4, minmax(100px, 1fr)) auto;
+  margin-bottom: 10px;
+  overflow: hidden;
+  border: 1px solid #d2cec5;
+  border-radius: 14px;
+  background: #f8f6f1;
+  color: #17191f;
+}
+.mission-desk .work-overview > div {
+  padding: 0 15px;
+  border-right-color: #dedad1;
+}
+.mission-desk .work-overview span {
+  color: #777269;
+  font-size: 8px;
+}
+.mission-desk .work-overview b {
+  font-size: 17px;
+}
+.mission-desk .work-overview > a {
+  min-width: 150px;
+  justify-content: center;
+  background: #17191f;
+  color: #fff;
+}
+.mission-desk .cognition-rail {
+  min-height: 62px;
+  grid-template-columns: 128px 1fr;
+  gap: 14px;
+  margin-bottom: 10px;
+  padding: 10px 14px;
+  overflow: hidden;
+  border: 1px solid #d2cec5;
+  border-radius: 14px;
+  background: #f8f6f1;
+}
+.mission-desk .cognition-rail-copy span {
+  font-size: 8px;
+}
+.mission-desk .cognition-rail-copy b {
+  font-size: 11px;
+}
+.mission-desk .cognition-rail li {
+  gap: 4px;
+  font-size: 8px;
+}
+.mission-desk .cognition-rail li i {
+  width: 19px;
+  height: 19px;
+}
+.mission-desk .control-room-card {
+  grid-template-columns: minmax(440px, 1fr) minmax(330px, 390px);
+  min-height: 468px;
+  overflow: hidden;
+  border: 1px solid #c9c6bf;
+  border-radius: 22px;
+  background: #f8f6f1;
+  box-shadow: 0 20px 55px #20242f12;
+}
+.mission-desk .room-composer {
+  min-height: 468px;
+  padding: clamp(30px, 4vw, 54px);
+  background: #f8f6f1;
+}
+.mission-desk .room-composer > label {
+  max-width: 650px;
+  margin-bottom: 16px;
+  font-size: clamp(28px, 3vw, 42px);
+}
+.mission-desk .room-composer textarea {
+  min-height: 120px;
+  border-radius: 12px;
+  border-color: #c9c6bf;
+  box-shadow: inset 0 1px 0 #00000008;
+}
+.mission-desk .starter-command-list button {
+  border-radius: 999px;
+  background: #efede7;
+}
+.mission-desk .room-composer > div:not(.starter-command-list) > button {
+  min-width: 128px;
+  border-radius: 9px;
+  background: #5d6cff;
+  box-shadow: 0 9px 20px #5d6cff28;
+}
+.mission-desk .room-presence {
+  min-height: 468px;
+  padding: 52px 22px 20px;
+  background:
+    radial-gradient(circle at 50% 43%, #33405d 0, #1c2232 38%, #11151f 72%);
+}
+.mission-desk .room-presence:after {
+  background-image:
+    linear-gradient(#ffffff08 1px, transparent 1px),
+    linear-gradient(90deg, #ffffff08 1px, transparent 1px);
+  background-size: 24px 24px;
+  mask-image: linear-gradient(#000 0 82%, transparent 100%);
+}
+.presence-console-head {
+  position: absolute;
+  z-index: 5;
+  inset: 18px 18px auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  color: #858da3;
+  font: 750 8px/1 monospace;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+.presence-console-head span {
+  color: #aeb6ff;
+}
+.mission-desk .truth-status {
+  left: auto;
+  right: 18px;
+  top: 43px;
+  border-radius: 7px;
+}
+.mission-desk .room-aura {
+  top: 47%;
+  width: 350px;
+  height: 350px;
+}
+.mission-desk .room-presence .nook3d {
+  width: 340px;
+  height: 365px;
+  margin-top: -4px;
+}
+.mission-desk .room-presence .nook3d-bubble {
+  display: none;
+}
+.mission-desk .brain-readout {
+  bottom: 78px;
+  border-color: #ffffff14;
+  border-radius: 8px;
+  background: #0a0d14dc;
+}
+.mission-desk .brain-readout b {
+  color: #b9ff65;
+}
+.presence-hud {
+  position: absolute;
+  z-index: 5;
+  inset: auto 16px 16px;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  overflow: hidden;
+  border: 1px solid #ffffff17;
+  border-radius: 10px;
+  background: #0b0e16db;
+  backdrop-filter: blur(10px);
+}
+.presence-hud > span {
+  min-width: 0;
+  padding: 10px;
+  border-right: 1px solid #ffffff12;
+}
+.presence-hud > span:last-child {
+  border-right: 0;
+}
+.presence-hud small,
+.presence-hud b {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.presence-hud small {
+  margin-bottom: 5px;
+  color: #778097;
+  font: 700 7px monospace;
+  text-transform: uppercase;
+}
+.presence-hud b {
+  color: #e9ecf4;
+  font-size: 9px;
+}
+.mission-desk .brain-panel,
+.mission-desk .task-launchpad,
+.mission-desk .task-drawer {
+  margin-top: 12px;
+  border-radius: 16px;
+}
+.mission-desk .brain-panel-toggle {
+  min-height: 54px;
+}
+
+@media (max-width: 1180px) {
+  .mission-desk .control-room-card {
+    grid-template-columns: minmax(380px, 1fr) 330px;
+  }
+  .mission-desk .room-presence .nook3d {
+    width: 310px;
+    height: 340px;
+  }
+}
+@media (max-width: 900px) {
+  .dashboard-shell {
+    grid-template-columns: 72px minmax(0, 1fr);
+  }
+  .dash-sidebar {
+    padding-inline: 9px;
+  }
+  .dash-brand {
+    justify-content: center;
+    padding: 0;
+    font-size: 0;
+  }
+  .dash-pet-profile {
+    justify-content: center;
+    padding: 8px;
+  }
+  .dash-pet-profile > div:not(.profile-orb) {
+    display: none;
+  }
+  .dash-sidebar nav a {
+    justify-content: center;
+    padding: 0;
+    font-size: 0;
+  }
+  .dash-sidebar nav a > span {
+    width: auto;
+    font-size: 14px;
+  }
+  .dash-main {
+    padding: 18px 16px 48px;
+  }
+  .mission-desk .dash-page-head {
+    margin-bottom: 12px;
+  }
+  .mission-desk .dash-page-head h1 {
+    max-width: 620px;
+    font-size: 34px;
+  }
+  .mission-desk .dash-page-head p,
+  .mission-desk .dash-closet-link {
+    display: none;
+  }
+  .mission-desk .work-overview {
+    min-height: 52px;
+    grid-template-columns: repeat(4, 1fr);
+  }
+  .mission-desk .work-overview > a {
+    display: none;
+  }
+  .mission-desk .work-overview > div {
+    min-width: 0;
+    padding: 0 10px;
+  }
+  .mission-desk .work-overview span {
+    max-width: 70px;
+  }
+  .mission-desk .cognition-rail {
+    grid-template-columns: 112px 1fr;
+    min-height: 54px;
+    padding-block: 8px;
+  }
+  .mission-desk .cognition-rail li span {
+    display: none;
+  }
+  .mission-desk .control-room-card {
+    grid-template-columns: minmax(0, 1fr) 290px;
+    min-height: 420px;
+  }
+  .mission-desk .room-composer {
+    min-height: 420px;
+    padding: 28px;
+  }
+  .mission-desk .room-composer > label {
+    font-size: 29px;
+  }
+  .mission-desk .room-presence {
+    min-height: 420px;
+  }
+  .mission-desk .room-presence .nook3d {
+    width: 280px;
+    height: 320px;
+  }
+  .presence-hud {
+    grid-template-columns: 1fr;
+  }
+  .presence-hud > span {
+    display: none;
+    border-right: 0;
+  }
+  .presence-hud > span:first-child {
+    display: block;
+  }
+}
+@media (max-width: 760px) {
+  .mission-desk .control-room-card {
+    grid-template-columns: 1fr;
+  }
+  .mission-desk .room-presence {
+    order: 1;
+    min-height: 270px;
+  }
+  .mission-desk .room-composer {
+    order: 2;
+    min-height: auto;
+  }
+  .mission-desk .room-presence .nook3d {
+    width: 260px;
+    height: 275px;
+    margin-top: 18px;
+  }
+  .mission-desk .room-aura {
+    width: 260px;
+    height: 260px;
+  }
+  .mission-desk .brain-readout {
+    bottom: 15px;
+  }
+  .presence-hud {
+    inset: auto 14px 14px auto;
+    width: 120px;
+  }
+}
+@media (max-width: 650px) {
+  .dashboard-shell {
+    display: block;
+  }
+  .dash-main {
+    padding: 16px 13px 92px;
+  }
+  .mission-desk .dash-page-head h1 {
+    font-size: 30px;
+  }
+  .mission-desk .work-overview > div {
+    display: grid;
+    align-content: center;
+    justify-items: start;
+    gap: 3px;
+  }
+  .mission-desk .work-overview b {
+    font-size: 15px;
+  }
+  .mission-desk .cognition-rail {
+    grid-template-columns: 1fr;
+  }
+  .mission-desk .cognition-rail-copy {
+    display: none;
+  }
+  .mission-desk .room-composer {
+    padding: 25px 20px;
+  }
+  .mission-desk .room-composer > label {
+    font-size: 27px;
+  }
+}
