@@ -3,10 +3,7 @@ import {
   type ActionEnvelope,
 } from "../../../lib/agent/contracts";
 import { createApprovalIntent, hashAction } from "../../../lib/agent/action";
-import {
-  MissingOpenAIKeyError,
-  createTaskPlan,
-} from "../../../lib/agent/planner";
+import { createTaskPlan } from "../../../lib/agent/planner";
 import { evaluateActionPolicy } from "../../../lib/agent/policy";
 import {
   ensureProfileAndNook,
@@ -79,7 +76,11 @@ export async function POST(request: Request) {
       { error: "Sign in with Google or GitHub to ask Nook for a plan." },
       { status: 401 },
     );
-  let body: { input?: unknown; nookName?: unknown };
+  let body: {
+    input?: unknown;
+    nookName?: unknown;
+    localMemoryIds?: unknown;
+  };
   try {
     body = (await request.json()) as typeof body;
   } catch {
@@ -103,6 +104,29 @@ export async function POST(request: Request) {
     const plan = await createTaskPlan(input);
     const taskId = crypto.randomUUID();
     const nook = await ensureProfileAndNook(identity, nookName || "Orbit");
+    const supabase = await createSupabaseServerClient();
+    if (!supabase) throw new Error("Supabase is not configured.");
+    const requestedMemoryIds = Array.isArray(body.localMemoryIds)
+      ? body.localMemoryIds
+          .filter(
+            (id): id is string =>
+              typeof id === "string" &&
+              /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+                id,
+              ),
+          )
+          .slice(0, 5)
+      : [];
+    if (requestedMemoryIds.length) {
+      const { data: validatedMemories } = await supabase
+        .from("nook_memories")
+        .select("id")
+        .eq("owner_id", identity.userId)
+        .eq("nook_id", nook.id)
+        .eq("status", "active")
+        .in("id", requestedMemoryIds);
+      plan.memoryHintIds = (validatedMemories ?? []).map((memory) => memory.id);
+    }
     const persistedSteps = plan.steps.length
       ? plan.steps
       : [
@@ -186,8 +210,6 @@ export async function POST(request: Request) {
       : approval
         ? "awaiting_approval"
         : "ready";
-    const supabase = await createSupabaseServerClient();
-    if (!supabase) throw new Error("Supabase is not configured.");
     const authorization = await signServerOperation(
       "create_task",
       identity.userId,
@@ -215,16 +237,6 @@ export async function POST(request: Request) {
       { status: 201 },
     );
   } catch (error) {
-    if (error instanceof MissingOpenAIKeyError) {
-      return Response.json(
-        {
-          error:
-            "Nook's agent key has not been enabled for this environment yet.",
-          code: "OPENAI_KEY_REQUIRED",
-        },
-        { status: 503 },
-      );
-    }
     if (error instanceof MissingExecutionSecretError) {
       return Response.json(
         {

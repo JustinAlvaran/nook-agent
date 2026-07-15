@@ -169,6 +169,42 @@ export function decideResearch(perception: PerceptionResult): ResearchDecision {
   };
 }
 
+/**
+ * A small, inspectable attention mechanism. It ranks approved memories by
+ * relevance, durability, correction value, and demonstrated usefulness rather
+ * than sending the whole memory store into every task.
+ */
+export function scoreMemorySalience(
+  memory: NookMemory,
+  request: string,
+  projectId?: string | null,
+  now = new Date(),
+) {
+  if (memory.expiresAt && Date.parse(memory.expiresAt) <= now.getTime())
+    return Number.NEGATIVE_INFINITY;
+  if (memory.projectId && memory.projectId !== projectId)
+    return Number.NEGATIVE_INFINITY;
+  const words = new Set(request.toLowerCase().match(/[a-z0-9]{3,}/g) ?? []);
+  const memoryWords = new Set(
+    memory.content.toLowerCase().match(/[a-z0-9]{3,}/g) ?? [],
+  );
+  const overlap = [...words].filter((word) => memoryWords.has(word)).length;
+  const lexical = words.size ? (overlap / words.size) * 8 : 0;
+  const kindWeight: Partial<Record<MemoryKind, number>> = {
+    correction: 1.5,
+    workflow: 0.75,
+    preference: 1.5,
+    profile: 1,
+    project: 0,
+  };
+  return (
+    lexical +
+    (memory.pinned ? 6 : 0) +
+    (kindWeight[memory.kind] ?? 0) +
+    Math.log2(1 + Math.max(0, memory.usefulness ?? 0))
+  );
+}
+
 export function assembleContext(args: {
   nook: NookContext["nook"];
   request: string;
@@ -180,33 +216,27 @@ export function assembleContext(args: {
   projectId?: string | null;
   now?: Date;
 }): NookContext {
-  const now = (args.now ?? new Date()).getTime();
-  const words = new Set(
-    args.request.toLowerCase().match(/[a-z0-9]{3,}/g) ?? [],
-  );
+  const now = args.now ?? new Date();
   const relevantMemories = args.memories
+    .map((memory) => ({
+      memory: { ...memory, content: memory.content.slice(0, 500) },
+      salience: scoreMemorySalience(
+        memory,
+        args.request,
+        args.projectId,
+        now,
+      ),
+    }))
     .filter(
-      (m) =>
-        (!m.expiresAt || Date.parse(m.expiresAt) > now) &&
-        (!m.projectId || m.projectId === args.projectId),
+      ({ memory, salience }) =>
+        Number.isFinite(salience) && (salience >= 1 || memory.pinned),
     )
-    .map((m) => ({ ...m, content: m.content.slice(0, 500) }))
-    .filter(
-      (m) =>
-        m.pinned || [...words].some((w) => m.content.toLowerCase().includes(w)),
-    )
-    .sort(
-      (a, b) =>
-        Number(b.pinned) -
-        Number(a.pinned) +
-        (b.usefulness ?? 0) -
-        (a.usefulness ?? 0),
-    )
+    .sort((a, b) => b.salience - a.salience)
     .slice(0, 8);
   return {
     nook: args.nook,
     currentRequest: args.request.slice(0, 1200),
-    relevantMemories,
+    relevantMemories: relevantMemories.map(({ memory }) => memory),
     recentTaskSummaries: args.recentTaskSummaries
       .slice(0, 5)
       .map((v) => v.slice(0, 300)),

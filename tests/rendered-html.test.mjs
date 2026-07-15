@@ -35,9 +35,15 @@ test("creator and control room use real account APIs", async () => {
   assert.match(dashboard, /fetch\("\/api\/tasks"/);
   assert.match(dashboard, /decideApproval/);
   assert.match(dashboard, /Execute saved tool/);
-  assert.match(dashboard, /What .* knows/);
+  assert.match(dashboard, /Inside Nook.*brain/);
   assert.match(dashboard, /api\/integrations\/google/);
   assert.match(taskRoute, /createTaskPlan/);
+  assert.doesNotMatch(taskRoute, /OPENAI_KEY_REQUIRED/);
+  assert.match(taskExecutor, /runKeylessProductTask/);
+  assert.match(taskExecutor, /assembleContext/);
+  assert.match(taskExecutor, /semanticHints/);
+  assert.match(taskRoute, /localMemoryIds/);
+  assert.match(taskRoute, /validatedMemories/);
   assert.match(taskRoute, /nook_create_supervised_task/);
   assert.match(taskRoute, /getServerIdentity/);
   assert.match(nookRoute, /getServerIdentity/);
@@ -45,6 +51,10 @@ test("creator and control room use real account APIs", async () => {
   assert.match(taskExecutor, /nook_claim_supervised_run/);
   assert.match(taskExecutor, /runProductTask/);
   assert.match(memoryRoute, /nook_memories/);
+  assert.match(memoryRoute, /MEMORY_REVIEW_REQUIRED/);
+  assert.doesNotMatch(memoryRoute, /\.upsert\(/);
+  assert.match(dashboard, /Reusable workflow/);
+  assert.match(dashboard, /Allocate for review/);
   assert.match(creator, /explanationDepth/);
   assert.match(claimMigration, /for update/);
   assert.doesNotMatch(claimMigration, /p_keep_approval/);
@@ -97,4 +107,21 @@ test("teaching allocates review-gated memory and motion renders an action-ready 
   assert.match(nook3d, /name="memory-rack"/);
   assert.match(nook3d, /name="source-rack"/);
   assert.match(nook3d, /sculptRuntime/);
+});
+
+test("private local semantic memory is opt-in and provider independent", async () => {
+  const [dashboard, localMemory, packageJson] = await Promise.all([
+    read("../app/dashboard/DashboardClient.tsx"),
+    read("../lib/agent/local-semantic-memory.ts"),
+    read("../package.json"),
+  ]);
+  assert.match(dashboard, /Load private local ML/);
+  assert.match(dashboard, /rankApprovedMemoryLocally/);
+  assert.match(localMemory, /feature-extraction/);
+  assert.match(localMemory, /webgpu/);
+  assert.match(localMemory, /wasm/);
+  assert.match(localMemory, /already-approved memory/);
+  assert.match(dashboard, /localMemoryIds/);
+  assert.match(packageJson, /@huggingface\/transformers/);
+  assert.doesNotMatch(localMemory, /OPENAI_API_KEY|apiKey/);
 });

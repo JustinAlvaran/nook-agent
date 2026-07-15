@@ -163,6 +163,8 @@ export type TaskPlan = {
   blocked: boolean;
   blockedReason: string;
   steps: PlanStep[];
+  /** Owner-side semantic suggestions, revalidated against active owned memory. */
+  memoryHintIds?: string[];
 };
 
 export type PlannedTask = {

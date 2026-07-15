@@ -37,7 +37,15 @@ export type NookBehavior = {
 };
 export type NookMemory = {
   id?: string;
-  kind: "preference" | "instruction" | "context";
+  kind:
+    | "profile"
+    | "preference"
+    | "project"
+    | "workflow"
+    | "correction"
+    | "temporary"
+    | "instruction"
+    | "context";
   content: string;
 };
 

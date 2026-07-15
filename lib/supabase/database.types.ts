@@ -634,34 +634,43 @@ export type Database = {
         Row: {
           content: string;
           created_at: string;
+          expires_at: string | null;
           id: string;
           kind: string;
           nook_id: string;
           owner_id: string;
           source: string;
           status: string;
+          pinned: boolean;
+          usefulness_count: number;
           updated_at: string;
         };
         Insert: {
           content: string;
           created_at?: string;
+          expires_at?: string | null;
           id?: string;
           kind: string;
           nook_id: string;
           owner_id: string;
           source?: string;
           status?: string;
+          pinned?: boolean;
+          usefulness_count?: number;
           updated_at?: string;
         };
         Update: {
           content?: string;
           created_at?: string;
+          expires_at?: string | null;
           id?: string;
           kind?: string;
           nook_id?: string;
           owner_id?: string;
           source?: string;
           status?: string;
+          pinned?: boolean;
+          usefulness_count?: number;
           updated_at?: string;
         };
         Relationships: [

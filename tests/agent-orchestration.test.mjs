@@ -37,6 +37,9 @@ const receiptsUrl = await transpile("../lib/agent/receipts.ts", {
 const brain = await import(
   await transpile("../lib/agent/brain.ts", { "./contracts": contractsUrl })
 );
+const keylessCore = await import(
+  await transpile("../lib/agent/keyless-core.ts")
+);
 const motion = await import(await transpile("../lib/agent/nook-motion.ts"));
 const memoryPolicy = await import(
   await transpile("../lib/agent/memory-policy.ts")
@@ -103,7 +106,30 @@ test("research security blocks unsafe URLs, enforces domains, and deduplicates",
   );
   assert.equal(results.length, 1);
   assert.equal(results[0].publishedAt, null);
-  assert.equal(research.configuredSearchProvider(), "github_public_search");
+  assert.equal(research.configuredSearchProvider(), "nook_commons");
+});
+
+test("keyless cognitive core plans and produces useful work without a model", () => {
+  const proposal = keylessCore.createKeylessPlanProposal(
+    "Draft landing page copy for a private local assistant",
+  );
+  assert.equal(proposal.blocked, false);
+  assert.match(proposal.userMessage, /locally/i);
+  const result = keylessCore.runKeylessProductTask({
+    input: "Draft landing page copy for a private local assistant",
+    nookName: "Orbit",
+    behavior: {
+      initiative: "balanced",
+      explanationDepth: "clear",
+      updateFrequency: "milestones",
+    },
+    memories: [
+      { kind: "preference", content: "Prefer direct, concrete copy" },
+    ],
+  });
+  assert.match(result.resultMarkdown, /What the visitor can do/);
+  assert.match(result.resultMarkdown, /Approved context applied/);
+  assert.match(result.summary, /keyless cognitive core/);
 });
 
 test("memory policy rejects secrets and excludes inactive or expired memory", () => {
@@ -206,6 +232,28 @@ test("context assembly is bounded, relevant, project-scoped, and expiration-awar
     ["pinned", "project"],
   );
   assert.equal(context.recentTaskSummaries.length, 5);
+});
+
+test("attention salience prioritizes corrections and demonstrated usefulness", () => {
+  const correction = brain.scoreMemorySalience(
+    {
+      id: "correction",
+      kind: "correction",
+      content: "Always verify research citations",
+      usefulness: 0,
+    },
+    "Prepare research citations",
+  );
+  const unrelated = brain.scoreMemorySalience(
+    {
+      id: "unrelated",
+      kind: "temporary",
+      content: "Use a blue icon",
+      usefulness: 0,
+    },
+    "Prepare research citations",
+  );
+  assert.ok(correction > unrelated);
 });
 
 test("task data deterministically drives honest mascot states", () => {

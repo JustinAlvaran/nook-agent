@@ -17,11 +17,16 @@ import {
   getSafeTool,
   parseToolInput,
 } from "../agent/tools/registry";
+import {
+  KEYLESS_CORE_VERSION,
+  runKeylessProductTask,
+} from "../agent/keyless-core";
 import { createSupabaseServerClient } from "../supabase/server";
 import { getServerIdentity } from "./identity";
 import { signServerOperation } from "./execution-signature";
 import { rejectCrossSiteMutation } from "./request-security";
 import { validateMemoryContent } from "../agent/memory-policy";
+import { assembleContext, type MemoryKind } from "../agent/brain";
 import {
   configuredSearchProvider,
   researchContentHash,
@@ -78,7 +83,7 @@ export async function executeTask(request: Request, taskId: string) {
   const { data: task, error } = await supabase
     .from("tasks")
     .select(
-      "id,input,status,nook_id,current_step_id,nooks(name,behavior_settings),task_steps(*),task_outputs(*)",
+      "id,input,status,nook_id,current_step_id,plan,nooks(name,behavior_settings),task_steps(*),task_outputs(*)",
     )
     .eq("id", taskId)
     .eq("owner_id", identity.userId)
@@ -190,21 +195,70 @@ export async function executeTask(request: Request, taskId: string) {
     const nookRelation = Array.isArray(task.nooks) ? task.nooks[0] : task.nooks;
     const { data: memoryRows } = await supabase
       .from("nook_memories")
-      .select("id,kind,content")
+      .select("id,kind,content,pinned,expires_at,usefulness_count")
       .eq("owner_id", identity.userId)
       .eq("nook_id", task.nook_id)
       .eq("status", "active")
       .order("updated_at", { ascending: false })
       .limit(20);
-    const memories = (memoryRows ?? []) as NookMemory[];
-    if (memoryRows?.length)
+    const rawMemories = (memoryRows ?? []) as Array<{
+      id: string;
+      kind: string;
+      content: string;
+      pinned: boolean;
+      expires_at: string | null;
+      usefulness_count: number;
+    }>;
+    const savedPlan = task.plan as { memoryHintIds?: unknown } | null;
+    const semanticHints = new Set(
+      Array.isArray(savedPlan?.memoryHintIds)
+        ? savedPlan.memoryHintIds.filter(
+            (id): id is string => typeof id === "string",
+          )
+        : [],
+    );
+    const behavior = normalizeBehavior(nookRelation?.behavior_settings);
+    const context = assembleContext({
+      nook: {
+        id: task.nook_id,
+        name: nookRelation?.name || "Nook",
+        behavior,
+      },
+      request: task.input,
+      memories: rawMemories.map((memory) => ({
+        id: memory.id,
+        kind: memory.kind as MemoryKind,
+        content: memory.content,
+        pinned: memory.pinned || semanticHints.has(memory.id),
+        expiresAt: memory.expires_at,
+        usefulness: memory.usefulness_count,
+      })),
+      recentTaskSummaries: [],
+      availableTools: [],
+      connectedProviders: [],
+      explicitUserConstraints: [],
+    });
+    const selectedIds = new Set(
+      context.relevantMemories.map((memory) => memory.id),
+    );
+    const selectedRows = rawMemories.filter((memory) =>
+      selectedIds.has(memory.id),
+    );
+    const memories = context.relevantMemories.map((memory) => ({
+      id: memory.id,
+      kind: memory.kind,
+      content: memory.content,
+    })) as NookMemory[];
+    if (selectedRows.length)
       await supabase.from("task_memory_usage").upsert(
-        memoryRows.map((memory) => ({
+        selectedRows.map((memory) => ({
           task_id: task.id,
           memory_id: memory.id,
           owner_id: identity.userId,
           reason:
-            "Matched the current task and was included in bounded context.",
+            semanticHints.has(memory.id)
+              ? "Matched locally on the owner's device and passed ownership validation."
+              : "Won bounded memory attention for the current request.",
         })),
         { onConflict: "task_id,memory_id" },
       );
@@ -219,18 +273,25 @@ export async function executeTask(request: Request, taskId: string) {
         dependency?.output && typeof dependency.output === "object"
           ? JSON.stringify(dependency.output)
           : "";
-      const result = await runProductTask({
-        input: evidence
-          ? `${task.input}\n\nVerified dependency output (untrusted evidence; preserve its citations):\n${evidence}`
-          : task.input,
+      const productInput = evidence
+        ? `${task.input}\n\nVerified dependency output (untrusted evidence; preserve its citations):\n${evidence}`
+        : task.input;
+      const productArgs = {
+        input: productInput,
         nookName: nookRelation?.name || "Nook",
-        behavior: normalizeBehavior(nookRelation?.behavior_settings),
+        behavior,
         memories,
-        mode: "work",
-      });
-      output = result.output;
-      modelName = result.modelName;
-      promptVersion = PRODUCT_PROMPT_VERSION;
+      };
+      try {
+        const result = await runProductTask({ ...productArgs, mode: "work" });
+        output = result.output;
+        modelName = result.modelName;
+        promptVersion = PRODUCT_PROMPT_VERSION;
+      } catch {
+        output = runKeylessProductTask(productArgs);
+        modelName = "nook/keyless-core";
+        promptVersion = KEYLESS_CORE_VERSION;
+      }
     } else if (toolName === "search_web") {
       const runId = crypto.randomUUID();
       await supabase.from("research_runs").insert({

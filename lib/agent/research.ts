@@ -16,7 +16,8 @@ export type SearchResult = {
 export type SearchProvider =
   | "brave"
   | "openai_web_search"
-  | "github_public_search";
+  | "github_public_search"
+  | "nook_commons";
 export function isSafeResearchUrl(raw: string) {
   try {
     const url = new URL(raw);
@@ -105,8 +106,7 @@ export async function researchContentHash(source: SearchResult) {
 
 export function configuredSearchProvider() {
   if (process.env.BRAVE_SEARCH_API_KEY) return "brave";
-  if (process.env.OPENAI_API_KEY) return "openai_web_search_or_github";
-  return "github_public_search";
+  return "nook_commons";
 }
 
 async function searchWithOpenAI(input: SearchWebInput) {
@@ -221,6 +221,150 @@ async function searchWithGitHub(input: SearchWebInput) {
   }));
 }
 
+function stripMarkup(value: unknown) {
+  return String(value ?? "")
+    .replace(/<[^>]*>/g, " ")
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;|&apos;/g, "'")
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+async function searchWithWikipedia(input: SearchWebInput) {
+  const endpoint = new URL("https://en.wikipedia.org/w/rest.php/v1/search/page");
+  endpoint.searchParams.set("q", input.query);
+  endpoint.searchParams.set("limit", String(Math.min(input.maxResults, 5)));
+  const response = await fetch(endpoint, {
+    headers: { Accept: "application/json", "User-Agent": "Nook-Agent/1.0" },
+    signal: AbortSignal.timeout(10000),
+  });
+  if (!response.ok) throw new Error(`WIKIPEDIA_SEARCH_${response.status}`);
+  const body = (await response.json()) as {
+    pages?: Array<{
+      id?: unknown;
+      key?: unknown;
+      title?: unknown;
+      excerpt?: unknown;
+      description?: unknown;
+    }>;
+  };
+  return (body.pages ?? []).map((page) => ({
+    title: page.title,
+    url: `https://en.wikipedia.org/wiki/${encodeURIComponent(String(page.key ?? page.title ?? page.id ?? ""))}`,
+    description: stripMarkup(page.excerpt || page.description),
+  }));
+}
+
+async function searchWithCrossref(input: SearchWebInput) {
+  const endpoint = new URL("https://api.crossref.org/works");
+  endpoint.searchParams.set("query", input.query);
+  endpoint.searchParams.set("rows", String(Math.min(input.maxResults, 5)));
+  endpoint.searchParams.set("select", "DOI,title,URL,abstract,publisher,published");
+  const response = await fetch(endpoint, {
+    headers: {
+      Accept: "application/json",
+      "User-Agent": "Nook-Agent/1.0",
+    },
+    signal: AbortSignal.timeout(10000),
+  });
+  if (!response.ok) throw new Error(`CROSSREF_SEARCH_${response.status}`);
+  const body = (await response.json()) as {
+    message?: {
+      items?: Array<{
+        DOI?: unknown;
+        title?: unknown[];
+        URL?: unknown;
+        abstract?: unknown;
+        publisher?: unknown;
+        published?: { "date-parts"?: unknown[][] };
+      }>;
+    };
+  };
+  return (body.message?.items ?? []).map((item) => {
+    const parts = item.published?.["date-parts"]?.[0] ?? [];
+    const year = Number(parts[0]);
+    const month = Math.max(1, Number(parts[1] ?? 1));
+    const day = Math.max(1, Number(parts[2] ?? 1));
+    const published = Number.isInteger(year)
+      ? new Date(Date.UTC(year, month - 1, day)).toISOString()
+      : undefined;
+    return {
+      title: Array.isArray(item.title) ? item.title[0] : item.title,
+      url:
+        typeof item.DOI === "string"
+          ? `https://doi.org/${item.DOI}`
+          : item.URL,
+      page_age: published,
+      description: [stripMarkup(item.abstract), stripMarkup(item.publisher)]
+        .filter(Boolean)
+        .join(" — "),
+    };
+  });
+}
+
+function commonsAdapterAllowed(input: SearchWebInput, domains: string[]) {
+  if (!input.allowedDomains?.length) return true;
+  return input.allowedDomains.some((allowed) =>
+    domains.some((domain) => domainMatches(domain, allowed)),
+  );
+}
+
+async function searchNookCommons(input: SearchWebInput) {
+  type RawResult = {
+    title?: unknown;
+    url?: unknown;
+    description?: unknown;
+    page_age?: unknown;
+  };
+  const scholarly =
+    /\b(?:paper|study|journal|academic|research|doi|evidence|literature)\b/i.test(
+      input.query,
+    );
+  const code =
+    /\b(?:github|repository|code|library|framework|typescript|javascript|python)\b/i.test(
+      input.query,
+    );
+  const adapters: Record<
+    "github" | "wikipedia" | "crossref",
+    { domains: string[]; run: () => Promise<RawResult[]> }
+  > = {
+    github: {
+      domains: ["github.com"],
+      run: () => searchWithGitHub(input),
+    },
+    wikipedia: {
+      domains: ["en.wikipedia.org", "wikipedia.org"],
+      run: () => searchWithWikipedia(input),
+    },
+    crossref: {
+      domains: ["doi.org", "crossref.org"],
+      run: () => searchWithCrossref(input),
+    },
+  };
+  const order: Array<keyof typeof adapters> = scholarly
+    ? ["crossref", "wikipedia", "github"]
+    : code
+      ? ["github", "wikipedia", "crossref"]
+      : ["wikipedia", "crossref", "github"];
+  const jobs = order
+    .filter((name) => commonsAdapterAllowed(input, adapters[name].domains))
+    .map((name) => adapters[name].run());
+  const settled = await Promise.allSettled(jobs);
+  const buckets = settled.map((result) =>
+    result.status === "fulfilled" ? result.value : [],
+  );
+  const interleaved: RawResult[] = [];
+  for (let index = 0; index < input.maxResults; index += 1) {
+    for (const bucket of buckets) {
+      if (bucket[index]) interleaved.push(bucket[index]);
+    }
+  }
+  return interleaved;
+}
+
 export async function searchWebWithProvider(
   input: SearchWebInput,
 ): Promise<{ sources: SearchResult[]; provider: SearchProvider }> {
@@ -232,20 +376,21 @@ export async function searchWebWithProvider(
   )
     throw new Error("INVALID_SEARCH_INPUT");
   if (!process.env.BRAVE_SEARCH_API_KEY) {
+    const commons = normalizeSearchResults(
+      await searchNookCommons(input),
+      input,
+    );
+    if (commons.length) return { sources: commons, provider: "nook_commons" };
     if (process.env.OPENAI_API_KEY) {
       try {
         const raw = await searchWithOpenAI(input);
         const sources = normalizeSearchResults(raw, input);
         if (sources.length) return { sources, provider: "openai_web_search" };
       } catch {
-        // A public, read-only GitHub search still keeps code and repository research usable.
+        // Nook remains keyless-first; a configured hosted search is only a last resort.
       }
     }
-    const raw = await searchWithGitHub(input);
-    return {
-      sources: normalizeSearchResults(raw, input),
-      provider: "github_public_search",
-    };
+    return { sources: [], provider: "nook_commons" };
   }
   const endpoint = new URL("https://api.search.brave.com/res/v1/web/search");
   endpoint.searchParams.set("q", input.query);

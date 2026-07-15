@@ -1,12 +1,7 @@
-import {
-  ensureProfileAndNook,
-  getServerIdentity,
-} from "../../../lib/server/identity";
+import { getServerIdentity } from "../../../lib/server/identity";
 import { createSupabaseServerClient } from "../../../lib/supabase/server";
-import { validateMemoryContent } from "../../../lib/agent/memory-policy";
 
 export const runtime = "edge";
-const kinds = new Set(["preference", "instruction", "context"]);
 
 export async function GET() {
   const identity = await getServerIdentity();
@@ -33,60 +28,13 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
-  const identity = await getServerIdentity();
-  if (!identity)
-    return Response.json(
-      { error: "Sign in before teaching Nook." },
-      { status: 401 },
-    );
-  let body: { kind?: unknown; content?: unknown; source?: unknown };
-  try {
-    body = (await request.json()) as typeof body;
-  } catch {
-    return Response.json(
-      { error: "Request body must be valid JSON." },
-      { status: 400 },
-    );
-  }
-  const kind = String(body.kind ?? "");
-  const checked = validateMemoryContent(
-    typeof body.content === "string" ? body.content : "",
+  void request;
+  return Response.json(
+    {
+      error:
+        "Direct memory activation is disabled. Create a memory proposal and review it first.",
+      code: "MEMORY_REVIEW_REQUIRED",
+    },
+    { status: 405 },
   );
-  const content = checked.ok ? checked.content : "";
-  const source = "taught" as const;
-  if (!kinds.has(kind))
-    return Response.json(
-      { error: "Choose a supported memory type." },
-      { status: 400 },
-    );
-  if (!checked.ok)
-    return Response.json({ error: checked.error }, { status: 400 });
-  const supabase = await createSupabaseServerClient();
-  if (!supabase)
-    return Response.json({ error: "Memory is unavailable." }, { status: 503 });
-  try {
-    const nook = await ensureProfileAndNook(identity);
-    const { data, error } = await supabase
-      .from("nook_memories")
-      .upsert(
-        {
-          owner_id: identity.userId,
-          nook_id: nook.id,
-          kind,
-          content,
-          source,
-          status: "active",
-        },
-        { onConflict: "owner_id,nook_id,kind,content" },
-      )
-      .select("id,kind,content,source,created_at")
-      .single();
-    if (error) throw error;
-    return Response.json({ memory: data }, { status: 201 });
-  } catch {
-    return Response.json(
-      { error: "Nook could not save that memory." },
-      { status: 503 },
-    );
-  }
 }

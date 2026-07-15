@@ -71,13 +71,27 @@ type LiveApproval = {
 };
 type Memory = {
   id: string;
-  kind: "preference" | "instruction" | "context";
+  kind:
+    | "profile"
+    | "preference"
+    | "project"
+    | "workflow"
+    | "correction"
+    | "temporary"
+    | "instruction"
+    | "context";
   content: string;
   source: string;
   created_at: string;
 };
+type TeachableMemoryKind =
+  | "preference"
+  | "instruction"
+  | "context"
+  | "workflow"
+  | "correction";
 type MemorySuggestion = {
-  kind: Memory["kind"];
+  kind: TeachableMemoryKind;
   content: string;
   reason: string;
 };
@@ -130,6 +144,7 @@ type MemoryUsage = {
   created_at: string;
   nook_memories: { id: string; kind: string; content: string } | null;
 };
+type LocalBrainState = "idle" | "loading" | "ready" | "error";
 
 const sections = [
   { id: "home", label: "Workbench", icon: "⌂" },
@@ -249,6 +264,16 @@ export default function DashboardClient() {
   const [clarificationAnswer, setClarificationAnswer] = useState("");
   const [clarified, setClarified] = useState(false);
   const [brainOpen, setBrainOpen] = useState(false);
+  const [localBrainState, setLocalBrainState] =
+    useState<LocalBrainState>("idle");
+  const [localBrainProgress, setLocalBrainProgress] = useState<number | null>(
+    null,
+  );
+  const [localBrainRuntime, setLocalBrainRuntime] = useState<string | null>(
+    null,
+  );
+  const [localMemoryMatches, setLocalMemoryMatches] = useState(0);
+  const [localMemoryHintIds, setLocalMemoryHintIds] = useState<string[]>([]);
   const [activeStepNumber, setActiveStepNumber] = useState<number | null>(null);
   const [agentState, setAgentState] = useState<NookAgentState>("ready");
   const [status, setStatus] = useState("Ready for a new task");
@@ -268,7 +293,8 @@ export default function DashboardClient() {
   const [taskResearch, setTaskResearch] = useState<ResearchRun[]>([]);
   const [taskMemories, setTaskMemories] = useState<MemoryUsage[]>([]);
   const [memories, setMemories] = useState<Memory[] | null>(null);
-  const [memoryKind, setMemoryKind] = useState<Memory["kind"]>("preference");
+  const [memoryKind, setMemoryKind] =
+    useState<TeachableMemoryKind>("preference");
   const [memoryText, setMemoryText] = useState("");
   const [proposals, setProposals] = useState<MemoryProposal[] | null>(null);
   const [activeTeachingProposal, setActiveTeachingProposal] =
@@ -327,6 +353,34 @@ export default function DashboardClient() {
         .trim(),
     [command],
   );
+
+  async function loadLocalBrain() {
+    if (localBrainState === "loading") return;
+    setLocalBrainState("loading");
+    setLocalBrainProgress(null);
+    try {
+      const { rankApprovedMemoryLocally } = await import(
+        "../../lib/agent/local-semantic-memory"
+      );
+      const result = await rankApprovedMemoryLocally({
+        request:
+          command.trim() ||
+          "Use my working preferences and relevant project context",
+        memories: (memories ?? []).map((memory) => ({
+          id: memory.id,
+          content: memory.content,
+        })),
+        onProgress: setLocalBrainProgress,
+      });
+      setLocalBrainRuntime(result.runtime);
+      const matches = result.matches.filter((match) => match.score >= 0.28);
+      setLocalMemoryMatches(matches.length);
+      setLocalMemoryHintIds(matches.map((match) => match.id));
+      setLocalBrainState("ready");
+    } catch {
+      setLocalBrainState("error");
+    }
+  }
 
   useEffect(() => {
     let cancelled = false;
@@ -509,10 +563,32 @@ export default function DashboardClient() {
     setMemorySuggestion(null);
     setStatus("Preparing a truthful, saved plan…");
     try {
+      let semanticMemoryIds = localMemoryHintIds;
+      if (localBrainState === "ready" && memories?.length) {
+        const { rankApprovedMemoryLocally } = await import(
+          "../../lib/agent/local-semantic-memory"
+        );
+        const localResult = await rankApprovedMemoryLocally({
+          request: command,
+          memories: memories.map((memory) => ({
+            id: memory.id,
+            content: memory.content,
+          })),
+        });
+        semanticMemoryIds = localResult.matches
+          .filter((match) => match.score >= 0.28)
+          .map((match) => match.id);
+        setLocalMemoryHintIds(semanticMemoryIds);
+        setLocalMemoryMatches(semanticMemoryIds.length);
+      }
       const r = await fetch("/api/tasks", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ input: command, nookName: appearance.name }),
+        body: JSON.stringify({
+          input: command,
+          nookName: appearance.name,
+          localMemoryIds: semanticMemoryIds,
+        }),
       });
       if (r.status === 401) {
         window.location.href = `/auth/sign-in?next=${encodeURIComponent("/dashboard")}`;
@@ -756,25 +832,51 @@ export default function DashboardClient() {
     }
   }
   async function remember(
-    kind = memoryKind,
+    kind: TeachableMemoryKind = memoryKind,
     content = memoryText,
     source: "taught" | "task" = "taught",
   ) {
     if (!content.trim()) return;
-    const r = await fetch("/api/memories", {
+    const proposalKind =
+      kind === "instruction"
+        ? "workflow"
+        : kind === "context"
+          ? "project"
+          : kind;
+    const title =
+      proposalKind === "workflow"
+        ? "Reusable workflow"
+        : proposalKind === "correction"
+          ? "Behavior correction"
+          : proposalKind === "project"
+            ? "Project context"
+            : "Working preference";
+    const r = await fetch("/api/memory-proposals", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ kind, content, source }),
+      body: JSON.stringify({
+        kind: proposalKind,
+        title,
+        content,
+        reason:
+          source === "task"
+            ? "You chose to retain this possible lesson from a completed task."
+            : "You explicitly taught Nook this and asked to review it before activation.",
+        confidence: 1,
+        nookName: appearance.name,
+      }),
     });
     const result = await r.json();
-    if (!r.ok) {
+    if (!r.ok || !result.proposal) {
       setStatus(result.error || "Memory could not be saved.");
       return;
     }
-    setMemories((items) => [result.memory, ...(items || [])]);
+    const proposal = result.proposal as MemoryProposal;
+    setProposals((items) => [proposal, ...(items || [])]);
+    setActiveTeachingProposal(proposal);
     setMemoryText("");
     setMemorySuggestion(null);
-    setStatus("Saved. Nook will use this on future tasks.");
+    setStatus("Memory slot allocated. Approve it before Nook may use it.");
   }
   async function forget(id: string) {
     const r = await fetch(`/api/memories/${id}`, { method: "DELETE" });
@@ -1128,33 +1230,64 @@ export default function DashboardClient() {
         >
           <span>
             <i />
-            What Nook understands
+            Inside Nook&apos;s brain
           </span>
           <b>{brainOpen ? "Hide" : "Show"}</b>
         </button>
         {brainOpen && (
           <div className="brain-panel-grid">
+            <article className="brain-runtime-card">
+              <small>Runtime</small>
+              <b>
+                {localBrainState === "ready"
+                  ? `Local ML · ${localBrainRuntime}`
+                  : "Nook Core · ready"}
+              </b>
+              <span>
+                {localBrainState === "loading"
+                  ? `Loading private model${localBrainProgress === null ? "" : ` · ${localBrainProgress}%`}`
+                  : localBrainState === "ready"
+                    ? `${localMemoryMatches} semantic memory matches · no provider key`
+                    : localBrainState === "error"
+                      ? "Local model unavailable · Nook Core is still active"
+                      : "Planning and safe local work need no API key."}
+              </span>
+              <button
+                type="button"
+                className="local-brain-button"
+                onClick={loadLocalBrain}
+                disabled={localBrainState === "loading"}
+              >
+                {localBrainState === "ready"
+                  ? "Refresh matches"
+                  : localBrainState === "loading"
+                    ? "Loading on device"
+                    : "Load private local ML"}
+              </button>
+            </article>
             <article>
-              <small>Intent</small>
+              <small>Attention</small>
               <b>{perception.probableIntent.replaceAll("_", " ")}</b>
               <span>
-                {Math.round(perception.confidence * 100)}% request match
+                {Math.round(perception.confidence * 100)}% salience · one focus
               </span>
             </article>
             <article>
-              <small>Current research</small>
-              <b>{researchDecision.required ? "Required" : "Not required"}</b>
-              <span>{researchDecision.reason}</span>
+              <small>Commons research</small>
+              <b>
+                {researchDecision.required ? "Seeking evidence" : "Standing by"}
+              </b>
+              <span>GitHub · Wikipedia · scholarly DOI records</span>
             </article>
             <article>
-              <small>Memory</small>
-              <b>{memories?.length ?? 0} active</b>
-              <span>Only approved, relevant memories may be used.</span>
+              <small>Memory allocation</small>
+              <b>{memories?.length ?? 0} consolidated</b>
+              <span>Only reviewed memories enter the working context.</span>
             </article>
             <article>
-              <small>External effects</small>
-              <b>None</b>
-              <span>Planning never publishes or changes another service.</span>
+              <small>Action gate</small>
+              <b>Supervised</b>
+              <span>External effects stop for an exact approval.</span>
             </article>
             {livePlan && (
               <article className="brain-plan-tools">
@@ -1165,7 +1298,9 @@ export default function DashboardClient() {
                     .map((step) => step.toolName)
                     .join(" → ") || "No tool"}
                 </b>
-                <span>Maximum three dependent tool steps.</span>
+                <span>
+                  Bounded cycle: observe → recall → research → act → verify.
+                </span>
               </article>
             )}
           </div>
@@ -1487,18 +1622,22 @@ export default function DashboardClient() {
           <span className="surface-label live">TEACH NOOK</span>
           <h2>Add something worth remembering</h2>
           <p>
-            Use preferences for style, instructions for standing rules, and
-            context for stable facts about your work.
+            Use preferences for style, workflows for reusable task recipes,
+            corrections for lessons, and context for stable project facts.
           </p>
         </div>
         <select
           value={memoryKind}
-          onChange={(e) => setMemoryKind(e.target.value as Memory["kind"])}
+          onChange={(e) =>
+            setMemoryKind(e.target.value as TeachableMemoryKind)
+          }
           aria-label="Memory type"
         >
           <option value="preference">Preference</option>
           <option value="instruction">Instruction</option>
           <option value="context">Context</option>
+          <option value="workflow">Workflow</option>
+          <option value="correction">Correction</option>
         </select>
         <textarea
           value={memoryText}
@@ -1510,7 +1649,7 @@ export default function DashboardClient() {
           onClick={() => remember()}
           disabled={memoryText.trim().length < 2}
         >
-          Teach Nook
+          Allocate for review
         </button>
       </div>
       <section className="memory-proposals">

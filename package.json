@@ -15,6 +15,7 @@
     "db:generate": "drizzle-kit generate"
   },
   "dependencies": {
+    "@huggingface/transformers": "^4.2.0",
     "@openai/agents": "^0.13.2",
     "@openai/agents-openai": "^0.13.2",
     "@react-three/fiber": "^9.6.1",
