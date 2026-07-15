@@ -11,6 +11,11 @@ import type {
 } from "../components/Nook3D";
 import { deriveNookMotionSignal } from "../../lib/agent/nook-motion";
 import { decideResearch, perceiveRequest } from "../../lib/agent/brain";
+import {
+  browserActionLabel,
+  browserActionUrl,
+  parseBrowserTask,
+} from "../../lib/browser/commands";
 
 type PlanStep = {
   id: string;
@@ -189,8 +194,8 @@ const starterCommands = [
   {
     label: "Open a browser search",
     value: "Open YouTube and search for ambient focus music",
-    capability: "browser_tab → signed device receipt",
-    detail: "Open one allowlisted search in a real tab through Browser Hand.",
+    capability: "safe browser open",
+    detail: "Open a useful search now. Connecting your browser is optional.",
   },
   {
     label: "Guide a workflow",
@@ -326,10 +331,6 @@ export default function DashboardClient() {
     code: string;
     expiresAt: string;
   } | null>(null);
-  const [browserPairing, setBrowserPairing] = useState<{
-    code: string;
-    expiresAt: string;
-  } | null>(null);
   const [appearance, setAppearance] = useState({
     name: "Orbit",
     primary: "#617fff",
@@ -363,6 +364,10 @@ export default function DashboardClient() {
     return stageByState[motionSignal.state] ?? -1;
   }, [motionSignal.state]);
   const perception = useMemo(() => perceiveRequest(command), [command]);
+  const browserIntent = useMemo(() => parseBrowserTask(command), [command]);
+  const browserIsConnected = Boolean(
+    browserDevices?.some((device) => device.status === "active"),
+  );
   const researchDecision = useMemo(
     () => decideResearch(perception),
     [perception],
@@ -514,8 +519,7 @@ export default function DashboardClient() {
       .catch(() => setConnector({ configured: false, connection: null }));
   }, [section, connector]);
   useEffect(() => {
-    if ((section !== "connectors" && section !== "desktop") || browserDevices)
-      return;
+    if (browserDevices) return;
     void fetch("/api/desktop/devices")
       .then(async (response) => {
         const result = await response.json();
@@ -542,6 +546,13 @@ export default function DashboardClient() {
 
   async function runCommand() {
     if (!command.trim() || busy) return;
+    if (browserIntent && browserDevices !== null && !browserIsConnected) {
+      setAgentState("ready");
+      setStatus(
+        "Use Open now above. Browser connection is only for saved, supervised runs.",
+      );
+      return;
+    }
     if (perception.probableIntent === "change_preference") {
       if (teachingContent.length < 2) {
         setAgentState("needs_input");
@@ -703,7 +714,7 @@ export default function DashboardClient() {
           );
         if (response.status === 202 && result.pending) {
           setStatus(
-            "Browser Hand has the exact command. Waiting for its signed receipt…",
+            "Your browser has the approved search. Waiting for confirmation…",
           );
           let completedTask: TaskRecord | null = null;
           for (let poll = 0; poll < 48; poll += 1) {
@@ -715,7 +726,7 @@ export default function DashboardClient() {
             const candidate = taskResult.task as TaskRecord;
             if (candidate.status === "failed")
               throw new Error(
-                "Browser Hand rejected or could not execute the tab command.",
+                "Your browser could not open that search. Try Open now from the Workbench.",
               );
             if (candidate.status === "completed") {
               completedTask = candidate;
@@ -730,7 +741,7 @@ export default function DashboardClient() {
               body: JSON.stringify({ commandId: result.commandId }),
             });
             throw new Error(
-              "Browser Hand did not return a verified receipt before the command expired.",
+              "Your browser connection timed out. Try Open now from the Workbench.",
             );
           }
           result = { completed: true, output: browserOutput };
@@ -1024,13 +1035,6 @@ export default function DashboardClient() {
       setPairing({ code: result.code, expiresAt: result.expiresAt });
     else setStatus(result.error || "Pairing is unavailable.");
   }
-  async function createBrowserPairing() {
-    const response = await fetch("/api/browser/pairings", { method: "POST" });
-    const result = await response.json();
-    if (response.ok && result.code)
-      setBrowserPairing({ code: result.code, expiresAt: result.expiresAt });
-    else setStatus(result.error || "Browser pairing is unavailable.");
-  }
   async function claimListing(listingId: string) {
     const r = await fetch("/api/marketplace/checkout", {
       method: "POST",
@@ -1240,23 +1244,49 @@ export default function DashboardClient() {
               </button>
             ))}
           </div>
+          {browserIntent && (
+            <div className="browser-quick-action">
+              <div>
+                <span>Ready to open</span>
+                <b>{browserActionLabel(browserIntent)}</b>
+                <small>No setup needed. This quick open is not saved.</small>
+              </div>
+              <a
+                href={browserActionUrl(browserIntent)}
+                target="_blank"
+                rel="noreferrer"
+                onClick={() => {
+                  setAgentState("ready");
+                  setStatus("Opened safely in a new tab.");
+                }}
+              >
+                Open now <span>↗</span>
+              </a>
+            </div>
+          )}
           <div>
-            <small>{command.length}/1200 · plans and results are saved</small>
-            <button
-              onClick={runCommand}
-              disabled={
-                !command.trim() ||
-                busy ||
-                (perception.probableIntent === "change_preference" &&
-                  teachingContent.length < 2)
-              }
-            >
-              {agentState === "planning"
-                ? "Preparing…"
-                : perception.probableIntent === "change_preference"
-                  ? "Allocate memory →"
-                  : "Prepare plan →"}
-            </button>
+            <small>
+              {command.length}/1200 · {browserIntent && !browserIsConnected
+                ? "Open now is a private shortcut"
+                : "prepared plans and results are saved"}
+            </small>
+            {(!browserIntent || browserIsConnected) && (
+              <button
+                onClick={runCommand}
+                disabled={
+                  !command.trim() ||
+                  busy ||
+                  (perception.probableIntent === "change_preference" &&
+                    teachingContent.length < 2)
+                }
+              >
+                {agentState === "planning"
+                  ? "Preparing…"
+                  : perception.probableIntent === "change_preference"
+                    ? "Allocate memory →"
+                    : "Prepare plan →"}
+              </button>
+            )}
           </div>
           <p role="status" aria-live="polite">
             <i className={`status-pulse status-${agentState}`} />
@@ -1882,26 +1912,21 @@ export default function DashboardClient() {
             <button disabled>Dedicated OAuth client required</button>
           )}
         </article>
-        <article className="browser-hand-card">
+        <article className="browser-hand-card connector-future">
           <div className="connector-mark browser">&gt;_</div>
           <span
-            className={`surface-label ${browserDevices?.some((device) => device.status === "active") ? "live" : "preview"}`}
+            className={`surface-label ${browserIsConnected ? "live" : "later"}`}
           >
-            {browserDevices?.some((device) => device.status === "active")
-              ? "PAIRED"
-              : "LOCAL COMPANION"}
+            {browserIsConnected
+              ? "CONNECTED"
+              : "COMING LATER"}
           </span>
-          <h2>Browser Hand</h2>
+          <h2>Automatic browser opens</h2>
           <p>
-            Opens verified provider pages and searches in real Chrome or Edge
-            tabs. Every command is hash-bound; every result is signed by this
-            browser.
+            Open now already works without setup. A one-click connection for
+            saved, supervised browser tasks is coming later.
           </p>
-          <ul>
-            <li>No password, cookie, history, or page-reading permission</li>
-            <li>No arbitrary JavaScript or remote code</li>
-            <li>Current lane: open YouTube, Google, Bing, Wikipedia, or GitHub</li>
-          </ul>
+          <small className="browser-privacy-note">Nook never reads passwords, history, or page contents.</small>
           {browserDevices?.length ? (
             <div className="truth-note">
               <b>{browserDevices[0].name}</b>
@@ -1911,20 +1936,7 @@ export default function DashboardClient() {
                   : "not yet"}
               </p>
             </div>
-          ) : browserPairing ? (
-            <div className="truth-note browser-pair-code">
-              <b>{browserPairing.code}</b>
-              <p>
-                Enter this in the Browser Hand extension before {new Date(
-                  browserPairing.expiresAt,
-                ).toLocaleTimeString()}.
-              </p>
-            </div>
-          ) : (
-            <button onClick={createBrowserPairing}>
-              Create browser pairing code
-            </button>
-          )}
+          ) : null}
         </article>
         <article className="connector-future">
           <span className="surface-label later">COMING LATER</span>

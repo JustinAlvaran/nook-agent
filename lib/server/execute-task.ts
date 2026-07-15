@@ -170,7 +170,8 @@ export async function executeTask(request: Request, taskId: string) {
     if (!browserAdmin)
       return Response.json(
         {
-          error: "Nook Browser Hand is not enabled in this environment yet.",
+          error:
+            "Saved browser runs are not available here yet. Use Open now in the Workbench.",
           code: "BROWSER_HAND_SETUP_REQUIRED",
         },
         { status: 503 },
@@ -189,7 +190,7 @@ export async function executeTask(request: Request, taskId: string) {
       return Response.json(
         {
           error:
-            "Pair or wake Nook Browser Hand in Connectors before running this tab task.",
+            "Reconnect your browser, or use Open now in the Workbench with no setup.",
           code: "BROWSER_HAND_REQUIRED",
         },
         { status: 409 },

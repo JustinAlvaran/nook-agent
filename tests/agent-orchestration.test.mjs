@@ -62,6 +62,17 @@ test("browser task compiler emits only fixed provider navigation", () => {
     browser.browserActionUrl(youtube),
     "https://www.youtube.com/results?search_query=rick%20roll",
   );
+  assert.deepEqual(
+    browser.parseBrowserTask(
+      "open new tab and search youtube then search for cat videos",
+    ),
+    {
+      action: "search_provider",
+      provider: "youtube",
+      query: "cat videos",
+      disposition: "new_tab",
+    },
+  );
   assert.deepEqual(browser.parseBrowserTask("open GitHub"), {
     action: "open_provider",
     provider: "github",

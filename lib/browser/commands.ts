@@ -72,6 +72,28 @@ export function parseBrowserTask(input: string): BrowserToolInput | null {
   const normalized = input.replace(/\s+/g, " ").trim();
   if (!normalized || unsupportedContinuation.test(normalized)) return null;
 
+  // Accept the way people naturally ask for this, including phrases such as
+  // "open a new tab and search YouTube then search for cat videos".
+  const mentionedProvider = normalized.match(
+    new RegExp(`\\b(${providerPattern})(?:\\.com)?\\b`, "i"),
+  )?.[1]?.toLowerCase() as BrowserProvider | undefined;
+  const naturalQuery = normalized.match(
+    /\b(?:search\s+for|look\s+up)\s+(.+)$/i,
+  )?.[1];
+  if (
+    mentionedProvider &&
+    mentionedProvider in BROWSER_PROVIDERS &&
+    naturalQuery &&
+    /\b(?:open|launch|go\s+to|new\s+tab)\b/i.test(normalized)
+  ) {
+    return {
+      action: "search_provider",
+      provider: mentionedProvider,
+      query: cleanQuery(naturalQuery),
+      disposition: "new_tab",
+    };
+  }
+
   const searchPatterns = [
     new RegExp(
       `\\b(?:open|launch|go\\s+to)\\s+(?:a\\s+new\\s+tab\\s+(?:for|with)\\s+)?(${providerPattern})(?:\\s+(?:and|then))?\\s+(?:search(?:\\s+for)?|look\\s+up)\\s+(.+)$`,

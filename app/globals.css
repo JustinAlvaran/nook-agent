@@ -7696,3 +7696,69 @@ a {
     font-size: 27px;
   }
 }
+
+/* Friendly browser actions: useful immediately, optional connection later. */
+.room-composer > .browser-quick-action {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 14px;
+  margin-top: 12px;
+  padding: 13px 14px;
+  border: 1px solid #b9c2ff;
+  border-radius: 12px;
+  background: #eef0ff;
+}
+.browser-quick-action span,
+.browser-quick-action b,
+.browser-quick-action small {
+  display: block;
+}
+.browser-quick-action > div > span {
+  margin-bottom: 4px;
+  color: #555ee1;
+  font: 800 8px monospace;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+.browser-quick-action b {
+  color: #20233a;
+  font-size: 12px;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+.browser-quick-action small {
+  margin-top: 4px;
+  color: #686d85;
+  font-size: 9px;
+}
+.browser-quick-action > a {
+  min-height: 40px;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  border-radius: 9px;
+  background: #17191f;
+  color: #fff;
+  padding: 0 14px;
+  font-size: 11px;
+  font-weight: 850;
+  white-space: nowrap;
+}
+.browser-quick-action > a span {
+  font-size: 14px;
+}
+.browser-privacy-note {
+  display: block;
+  margin-bottom: 16px;
+  color: #777269;
+  font-size: 9px;
+}
+@media (max-width: 520px) {
+  .room-composer > .browser-quick-action {
+    grid-template-columns: 1fr;
+  }
+  .browser-quick-action > a {
+    justify-content: center;
+  }
+}
