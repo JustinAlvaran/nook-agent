@@ -33,6 +33,11 @@ import {
   searchWebWithProvider,
   type SearchWebInput,
 } from "../agent/research";
+import {
+  createBrowserCommand,
+  type BrowserToolInput,
+} from "../browser/commands";
+import { createSupabaseAdminClient } from "../supabase/admin";
 
 const defaultBehavior: NookBehavior = {
   initiative: "balanced",
@@ -139,7 +144,7 @@ export async function executeTask(request: Request, taskId: string) {
       planVersion: 1,
       stepId: plannedStep.id,
       actionType: toolName,
-      connector: "internal",
+      connector: toolName === "browser_tab" ? "browser_hand" : "internal",
       arguments: toolInput,
       externalEffect: definition.externalEffect,
       reversible: definition.reversible,
@@ -157,6 +162,38 @@ export async function executeTask(request: Request, taskId: string) {
       },
       { status: 409 },
     );
+  }
+
+  let browserAdmin: ReturnType<typeof createSupabaseAdminClient> = null;
+  if (toolName === "browser_tab") {
+    browserAdmin = createSupabaseAdminClient();
+    if (!browserAdmin)
+      return Response.json(
+        {
+          error: "Nook Browser Hand is not enabled in this environment yet.",
+          code: "BROWSER_HAND_SETUP_REQUIRED",
+        },
+        { status: 503 },
+      );
+    const onlineAfter = new Date(Date.now() - 90_000).toISOString();
+    const { data: browserDevice } = await browserAdmin
+      .from("devices")
+      .select("id")
+      .eq("owner_id", identity.userId)
+      .eq("platform", "browser")
+      .eq("status", "active")
+      .gte("last_seen_at", onlineAfter)
+      .limit(1)
+      .maybeSingle();
+    if (!browserDevice)
+      return Response.json(
+        {
+          error:
+            "Pair or wake Nook Browser Hand in Connectors before running this tab task.",
+          code: "BROWSER_HAND_REQUIRED",
+        },
+        { status: 409 },
+      );
   }
 
   const rpc = supabase.rpc.bind(supabase) as unknown as Rpc;
@@ -192,6 +229,41 @@ export async function executeTask(request: Request, taskId: string) {
     const claimedInput = parseToolInput(toolName, claim.tool_input);
     if (JSON.stringify(claimedInput) !== JSON.stringify(toolInput))
       throw new TypeError("Claimed arguments changed");
+    if (toolName === "browser_tab") {
+      if (!browserAdmin) throw new Error("BROWSER_HAND_SETUP_REQUIRED");
+      const commandId = crypto.randomUUID();
+      const expiresAt = new Date(Date.now() + 60_000).toISOString();
+      const command = createBrowserCommand({
+        id: commandId,
+        taskId: task.id,
+        actionHash: plannedStep.action_hash,
+        expiresAt,
+        input: claimedInput as BrowserToolInput,
+      });
+      const { error: enqueueError } = await browserAdmin
+        .from("browser_commands")
+        .insert({
+          id: commandId,
+          owner_id: identity.userId,
+          task_id: task.id,
+          run_id: runId,
+          step_id: plannedStep.id,
+          action_hash: plannedStep.action_hash,
+          command,
+          expires_at: expiresAt,
+        });
+      if (enqueueError) throw new Error(enqueueError.message);
+      return Response.json(
+        {
+          pending: true,
+          completed: false,
+          commandId,
+          message:
+            "The exact tab command was queued for the paired Browser Hand. Waiting for its signed receipt.",
+        },
+        { status: 202, headers: { "cache-control": "no-store" } },
+      );
+    }
     const nookRelation = Array.isArray(task.nooks) ? task.nooks[0] : task.nooks;
     const { data: memoryRows } = await supabase
       .from("nook_memories")

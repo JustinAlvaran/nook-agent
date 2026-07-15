@@ -1,5 +1,6 @@
 import { z } from "zod";
 import type { RiskClass, SafeToolName, TaskPlan } from "../contracts";
+import { parseBrowserTask } from "../../browser/commands";
 
 const draftInput = z
   .object({
@@ -77,6 +78,23 @@ const proposalInput = z
     reason: z.string().min(1).max(300),
   })
   .strict();
+const browserTabInput = z.discriminatedUnion("action", [
+  z
+    .object({
+      action: z.literal("open_provider"),
+      provider: z.enum(["youtube", "google", "bing", "wikipedia", "github"]),
+      disposition: z.literal("new_tab"),
+    })
+    .strict(),
+  z
+    .object({
+      action: z.literal("search_provider"),
+      provider: z.enum(["youtube", "google", "bing", "wikipedia", "github"]),
+      query: z.string().min(1).max(300),
+      disposition: z.literal("new_tab"),
+    })
+    .strict(),
+]);
 
 type ToolDefinition = {
   version: "1";
@@ -152,6 +170,15 @@ export const SAFE_TOOL_REGISTRY = Object.freeze({
     permissionLabel: "Propose a memory for user review",
     inputSchema: proposalInput,
   },
+  browser_tab: {
+    version: "1",
+    riskClass: 1,
+    externalEffect: false,
+    reversible: true,
+    requiresApproval: false,
+    permissionLabel: "Open one allowlisted provider page in a new browser tab",
+    inputSchema: browserTabInput,
+  },
 } satisfies Record<SafeToolName, ToolDefinition>);
 
 export function getSafeTool(name: string) {
@@ -206,6 +233,18 @@ function selectTool(
       title: "Review one Nook behavior change",
       detail:
         "Nook will change only the named reversible setting after your approval.",
+    };
+  const browserTask = parseBrowserTask(input);
+  if (browserTask)
+    return {
+      name: "browser_tab",
+      input: browserTask,
+      title:
+        browserTask.action === "search_provider"
+          ? `Open ${browserTask.provider} search in a new tab`
+          : `Open ${browserTask.provider} in a new tab`,
+      detail:
+        "Nook Browser Hand will execute one hash-bound tab command and return a signed device receipt. It cannot read passwords, cookies, or page contents.",
     };
   if (
     /\b(?:research|latest|newest|current|recent|look up|find sources?)\b/i.test(
@@ -361,7 +400,8 @@ export function compileSafePlan(input: string, proposed: TaskPlan): TaskPlan {
         kind:
           selected.name === "create_draft"
             ? "draft"
-            : selected.name === "open_supported_url"
+            : selected.name === "open_supported_url" ||
+                selected.name === "browser_tab"
               ? "open_link"
               : "explain",
         mode: "tool",
@@ -379,7 +419,11 @@ export function compileSafePlan(input: string, proposed: TaskPlan): TaskPlan {
 export function deterministicToolOutput(
   name: Exclude<
     SafeToolName,
-    "create_draft" | "search_web" | "summarize_sources" | "propose_memory"
+    | "create_draft"
+    | "search_web"
+    | "summarize_sources"
+    | "propose_memory"
+    | "browser_tab"
   >,
   input: Record<string, unknown>,
 ) {

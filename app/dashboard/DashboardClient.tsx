@@ -114,6 +114,14 @@ type ConnectorState = {
     last_used_at?: string;
   };
 };
+type PairedDevice = {
+  id: string;
+  name: string;
+  platform: string;
+  status: string;
+  last_seen_at: string | null;
+  created_at: string;
+};
 type CatalogItem = {
   listing_id: string;
   name: string;
@@ -177,6 +185,12 @@ const starterCommands = [
     value: "Help me draft a concise launch announcement using only the facts I provide.",
     capability: "create_draft",
     detail: "Turn supplied facts into a useful deliverable without publishing.",
+  },
+  {
+    label: "Open a browser search",
+    value: "Open YouTube and search for ambient focus music",
+    capability: "browser_tab → signed device receipt",
+    detail: "Open one allowlisted search in a real tab through Browser Hand.",
   },
   {
     label: "Guide a workflow",
@@ -303,9 +317,16 @@ export default function DashboardClient() {
   const [editingMemoryText, setEditingMemoryText] = useState("");
   const [busy, setBusy] = useState(false);
   const [connector, setConnector] = useState<ConnectorState | null>(null);
+  const [browserDevices, setBrowserDevices] = useState<PairedDevice[] | null>(
+    null,
+  );
   const [catalog, setCatalog] = useState<CatalogItem[] | null>(null);
   const [claimedListings, setClaimedListings] = useState<string[]>([]);
   const [pairing, setPairing] = useState<{
+    code: string;
+    expiresAt: string;
+  } | null>(null);
+  const [browserPairing, setBrowserPairing] = useState<{
     code: string;
     expiresAt: string;
   } | null>(null);
@@ -493,6 +514,23 @@ export default function DashboardClient() {
       .catch(() => setConnector({ configured: false, connection: null }));
   }, [section, connector]);
   useEffect(() => {
+    if ((section !== "connectors" && section !== "desktop") || browserDevices)
+      return;
+    void fetch("/api/desktop/devices")
+      .then(async (response) => {
+        const result = await response.json();
+        setBrowserDevices(
+          response.ok
+            ? (result.devices || []).filter(
+                (device: PairedDevice) =>
+                  device.platform === "browser" && device.status === "active",
+              )
+            : [],
+        );
+      })
+      .catch(() => setBrowserDevices([]));
+  }, [section, browserDevices]);
+  useEffect(() => {
     if (section !== "marketplace" || catalog) return;
     void fetch("/api/marketplace/catalog")
       .then(async (r) => {
@@ -663,6 +701,40 @@ export default function DashboardClient() {
           throw new Error(
             String(result.error || "Nook could not finish this work."),
           );
+        if (response.status === 202 && result.pending) {
+          setStatus(
+            "Browser Hand has the exact command. Waiting for its signed receipt…",
+          );
+          let completedTask: TaskRecord | null = null;
+          for (let poll = 0; poll < 48; poll += 1) {
+            await new Promise((resolve) => setTimeout(resolve, 1_250));
+            const taskResponse = await fetch(`/api/tasks/${taskId}`);
+            const taskResult = await taskResponse.json();
+            if (!taskResponse.ok)
+              throw new Error(taskResult.error || "Browser receipt lookup failed.");
+            const candidate = taskResult.task as TaskRecord;
+            if (candidate.status === "failed")
+              throw new Error(
+                "Browser Hand rejected or could not execute the tab command.",
+              );
+            if (candidate.status === "completed") {
+              completedTask = candidate;
+              break;
+            }
+          }
+          const browserOutput = completedTask?.task_outputs?.[0];
+          if (!browserOutput) {
+            await fetch("/api/browser/commands/cancel", {
+              method: "POST",
+              headers: { "content-type": "application/json" },
+              body: JSON.stringify({ commandId: result.commandId }),
+            });
+            throw new Error(
+              "Browser Hand did not return a verified receipt before the command expired.",
+            );
+          }
+          result = { completed: true, output: browserOutput };
+        }
         if (result.completed) break;
       }
       if (!result || !result.completed)
@@ -951,6 +1023,13 @@ export default function DashboardClient() {
     if (r.ok && result.code)
       setPairing({ code: result.code, expiresAt: result.expiresAt });
     else setStatus(result.error || "Pairing is unavailable.");
+  }
+  async function createBrowserPairing() {
+    const response = await fetch("/api/browser/pairings", { method: "POST" });
+    const result = await response.json();
+    if (response.ok && result.code)
+      setBrowserPairing({ code: result.code, expiresAt: result.expiresAt });
+    else setStatus(result.error || "Browser pairing is unavailable.");
   }
   async function claimListing(listingId: string) {
     const r = await fetch("/api/marketplace/checkout", {
@@ -1796,6 +1875,50 @@ export default function DashboardClient() {
             </a>
           ) : (
             <button disabled>Dedicated OAuth client required</button>
+          )}
+        </article>
+        <article className="browser-hand-card">
+          <div className="connector-mark browser">&gt;_</div>
+          <span
+            className={`surface-label ${browserDevices?.some((device) => device.status === "active") ? "live" : "preview"}`}
+          >
+            {browserDevices?.some((device) => device.status === "active")
+              ? "PAIRED"
+              : "LOCAL COMPANION"}
+          </span>
+          <h2>Browser Hand</h2>
+          <p>
+            Opens verified provider pages and searches in real Chrome or Edge
+            tabs. Every command is hash-bound; every result is signed by this
+            browser.
+          </p>
+          <ul>
+            <li>No password, cookie, history, or page-reading permission</li>
+            <li>No arbitrary JavaScript or remote code</li>
+            <li>Current lane: open YouTube, Google, Bing, Wikipedia, or GitHub</li>
+          </ul>
+          {browserDevices?.length ? (
+            <div className="truth-note">
+              <b>{browserDevices[0].name}</b>
+              <p>
+                Last checked {browserDevices[0].last_seen_at
+                  ? new Date(browserDevices[0].last_seen_at).toLocaleString()
+                  : "not yet"}
+              </p>
+            </div>
+          ) : browserPairing ? (
+            <div className="truth-note browser-pair-code">
+              <b>{browserPairing.code}</b>
+              <p>
+                Enter this in the Browser Hand extension before {new Date(
+                  browserPairing.expiresAt,
+                ).toLocaleTimeString()}.
+              </p>
+            </div>
+          ) : (
+            <button onClick={createBrowserPairing}>
+              Create browser pairing code
+            </button>
           )}
         </article>
         <article className="connector-future">

@@ -70,7 +70,7 @@ test("supervised tool execution is allowlisted, hash-bound, and receipt-backed",
     read("../app/api/tasks/[taskId]/approvals/[approvalId]/route.ts"),
     read("../app/auth/callback/route.ts"),
   ]);
-  for (const tool of ["create_draft", "open_supported_url", "guided_workflow", "save_nook_preference"]) assert.match(registry, new RegExp(tool));
+  for (const tool of ["create_draft", "open_supported_url", "guided_workflow", "save_nook_preference", "browser_tab"]) assert.match(registry, new RegExp(tool));
   assert.match(registry, /Unknown or disabled tool/);
   assert.match(executor, /action\.actionHash !== plannedStep\.action_hash/);
   assert.match(executor, /nook_finish_supervised_run/);

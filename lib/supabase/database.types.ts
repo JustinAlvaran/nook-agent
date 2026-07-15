@@ -245,6 +245,82 @@ export type Database = {
           },
         ];
       };
+      browser_commands: {
+        Row: {
+          action_hash: string;
+          claimed_at: string | null;
+          claimed_device_id: string | null;
+          command: Json;
+          completed_at: string | null;
+          created_at: string;
+          expires_at: string;
+          id: string;
+          owner_id: string;
+          receipt_signature: string | null;
+          result: Json | null;
+          run_id: string;
+          status: string;
+          step_id: string;
+          task_id: string;
+        };
+        Insert: {
+          action_hash: string;
+          claimed_at?: string | null;
+          claimed_device_id?: string | null;
+          command: Json;
+          completed_at?: string | null;
+          created_at?: string;
+          expires_at: string;
+          id: string;
+          owner_id: string;
+          receipt_signature?: string | null;
+          result?: Json | null;
+          run_id: string;
+          status?: string;
+          step_id: string;
+          task_id: string;
+        };
+        Update: {
+          action_hash?: string;
+          claimed_at?: string | null;
+          claimed_device_id?: string | null;
+          command?: Json;
+          completed_at?: string | null;
+          created_at?: string;
+          expires_at?: string;
+          id?: string;
+          owner_id?: string;
+          receipt_signature?: string | null;
+          result?: Json | null;
+          run_id?: string;
+          status?: string;
+          step_id?: string;
+          task_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "browser_commands_claimed_device_id_fkey";
+            columns: ["claimed_device_id"];
+            isOneToOne: false;
+            referencedRelation: "devices";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "browser_commands_owner_id_fkey";
+            columns: ["owner_id"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "browser_commands_task_id_fkey";
+            columns: ["task_id"];
+            isOneToOne: false;
+            referencedRelation: "tasks";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       capability_grants: {
         Row: {
           capability: string;
@@ -1504,6 +1580,42 @@ export type Database = {
       };
     };
     Functions: {
+      nook_claim_browser_command: {
+        Args: { p_token_hash: string };
+        Returns: {
+          action_hash: string;
+          command: Json;
+          command_id: string;
+          expires_at: string;
+        }[];
+      };
+      nook_finish_browser_command: {
+        Args: {
+          p_command_id: string;
+          p_receipt_signature: string;
+          p_result: Json;
+          p_status: string;
+          p_token_hash: string;
+        };
+        Returns: {
+          output_id: string | null;
+          task_id: string;
+          task_status: string;
+        }[];
+      };
+      nook_expire_browser_command: {
+        Args: { p_command_id: string; p_owner_id: string };
+        Returns: boolean;
+      };
+      nook_redeem_browser_pairing: {
+        Args: {
+          p_code_hash: string;
+          p_device_name: string;
+          p_public_key: string;
+          p_token_hash: string;
+        };
+        Returns: { device_id: string }[];
+      };
       nook_review_memory_proposal: {
         Args: {
           p_proposal_id: string;

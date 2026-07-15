@@ -159,7 +159,7 @@ export async function POST(request: Request) {
         planVersion: 1,
         stepId,
         actionType: planStep.toolName || "instruction",
-        connector: "internal",
+        connector: planStep.toolName === "browser_tab" ? "browser_hand" : "internal",
         arguments: planStep.toolInput || {},
         externalEffect: planStep.externalEffect,
         reversible: true,

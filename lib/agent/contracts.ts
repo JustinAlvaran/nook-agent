@@ -37,6 +37,7 @@ export type AgentCapability =
   | "research"
   | "draft"
   | "verify"
+  | "browser_navigate"
   | "connector_read"
   | "connector_write";
 
@@ -153,7 +154,8 @@ export type SafeToolName =
   | "save_nook_preference"
   | "search_web"
   | "summarize_sources"
-  | "propose_memory";
+  | "propose_memory"
+  | "browser_tab";
 
 export type TaskPlan = {
   summary: string;

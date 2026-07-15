@@ -46,6 +46,50 @@ const memoryPolicy = await import(
 );
 const research = await import(await transpile("../lib/agent/research.ts"));
 const sequential = await import(await transpile("../lib/agent/sequential.ts"));
+const browser = await import(await transpile("../lib/browser/commands.ts"));
+
+test("browser task compiler emits only fixed provider navigation", () => {
+  const youtube = browser.parseBrowserTask(
+    "open YouTube and search for rick roll",
+  );
+  assert.deepEqual(youtube, {
+    action: "search_provider",
+    provider: "youtube",
+    query: "rick roll",
+    disposition: "new_tab",
+  });
+  assert.equal(
+    browser.browserActionUrl(youtube),
+    "https://www.youtube.com/results?search_query=rick%20roll",
+  );
+  assert.deepEqual(browser.parseBrowserTask("open GitHub"), {
+    action: "open_provider",
+    provider: "github",
+    disposition: "new_tab",
+  });
+  assert.equal(browser.parseBrowserTask("open my bank and log in"), null);
+  assert.equal(
+    browser.parseBrowserTask("open YouTube, search cats, then click the first result"),
+    null,
+  );
+  assert.equal(browser.parseBrowserTask("open https://127.0.0.1/admin"), null);
+});
+
+test("browser command binds the exact compiled URL and expiry", () => {
+  const input = browser.parseBrowserTask("search Wikipedia for bounded agency");
+  const command = browser.createBrowserCommand({
+    id: "11111111-1111-4111-8111-111111111111",
+    taskId: "22222222-2222-4222-8222-222222222222",
+    actionHash: "a".repeat(64),
+    expiresAt: "2030-01-01T00:00:00.000Z",
+    input,
+  });
+  assert.equal(command.version, "nook-browser-command@1");
+  assert.equal(
+    command.action.url,
+    "https://en.wikipedia.org/w/index.php?search=bounded%20agency",
+  );
+});
 test("sequential plans are bounded and skip downstream steps after failure", () => {
   assert.equal(
     sequential.validateSequentialPlan([

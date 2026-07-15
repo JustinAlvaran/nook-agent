@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Nook Browser Hand</title>
+    <link rel="stylesheet" href="popup.css" />
+  </head>
+  <body>
+    <main>
+      <header><span>&gt;_</span><div><b>NOOK</b><small>BROWSER HAND</small></div></header>
+      <section id="unpaired">
+        <p>Pair this browser with your Nook control room.</p>
+        <label>One-time code<input id="code" maxlength="8" autocomplete="off" placeholder="ABCD2345" /></label>
+        <label>Control room
+          <select id="api-origin">
+            <option value="https://nook-desktop-pet.cookiewapo3.chatgpt.site">Production</option>
+            <option value="http://localhost:3000">Local development</option>
+          </select>
+        </label>
+        <button id="pair">Pair Browser Hand</button>
+      </section>
+      <section id="paired" hidden>
+        <div class="live"><i></i><b>Paired and listening</b></div>
+        <p id="device"></p>
+        <div class="boundary">Can open fixed provider pages. Cannot read cookies, passwords, history, or page contents.</div>
+        <p id="receipt"></p>
+        <button id="wake">Check for tasks now</button>
+        <button id="disconnect" class="ghost">Disconnect locally</button>
+      </section>
+      <p id="status" role="status"></p>
+    </main>
+    <script src="popup.js"></script>
+  </body>
+</html>
+

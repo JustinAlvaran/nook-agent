@@ -1,0 +1,24 @@
+{
+  "manifest_version": 3,
+  "name": "Nook Browser Hand",
+  "description": "Executes supervised, hash-bound Nook tab commands and returns signed receipts.",
+  "version": "0.1.0",
+  "minimum_chrome_version": "120",
+  "permissions": ["storage", "alarms"],
+  "host_permissions": [
+    "https://nook-desktop-pet.cookiewapo3.chatgpt.site/*",
+    "http://localhost:3000/*",
+    "http://127.0.0.1:3000/*"
+  ],
+  "background": {
+    "service_worker": "service-worker.js",
+    "type": "module"
+  },
+  "action": {
+    "default_title": "Nook Browser Hand",
+    "default_popup": "popup.html"
+  },
+  "content_security_policy": {
+    "extension_pages": "script-src 'self'; object-src 'none'; base-uri 'none'"
+  }
+}
