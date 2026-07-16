@@ -34,8 +34,17 @@ const retry = await import(await transpile("../lib/agent/retry.ts"));
 const receiptsUrl = await transpile("../lib/agent/receipts.ts", {
   "./contracts": contractsUrl,
 });
+const browserUrl = await transpile("../lib/browser/commands.ts");
+const browser = await import(browserUrl);
+const semanticUrl = await transpile("../lib/agent/semantic-brain.ts", {
+  "../browser/commands": browserUrl,
+});
+const semantic = await import(semanticUrl);
 const brain = await import(
-  await transpile("../lib/agent/brain.ts", { "./contracts": contractsUrl })
+  await transpile("../lib/agent/brain.ts", {
+    "./contracts": contractsUrl,
+    "./semantic-brain": semanticUrl,
+  })
 );
 const keylessCore = await import(
   await transpile("../lib/agent/keyless-core.ts")
@@ -46,7 +55,6 @@ const memoryPolicy = await import(
 );
 const research = await import(await transpile("../lib/agent/research.ts"));
 const sequential = await import(await transpile("../lib/agent/sequential.ts"));
-const browser = await import(await transpile("../lib/browser/commands.ts"));
 
 test("browser task compiler emits only fixed provider navigation", () => {
   const youtube = browser.parseBrowserTask(
@@ -78,12 +86,67 @@ test("browser task compiler emits only fixed provider navigation", () => {
     provider: "github",
     disposition: "new_tab",
   });
+  assert.deepEqual(browser.parseBrowserTask("search yt for lo-fi beats"), {
+    action: "search_provider",
+    provider: "youtube",
+    query: "lo-fi beats",
+    disposition: "new_tab",
+  });
+  assert.deepEqual(browser.parseBrowserTask("find RAG agents on git hub"), {
+    action: "search_provider",
+    provider: "github",
+    query: "RAG agents",
+    disposition: "new_tab",
+  });
+  assert.deepEqual(browser.parseBrowserTask("open youtub and search cats"), {
+    action: "search_provider",
+    provider: "youtube",
+    query: "cats",
+    disposition: "new_tab",
+  });
+  assert.equal(browser.parseBrowserTask("open youtube and search for"), null);
   assert.equal(browser.parseBrowserTask("open my bank and log in"), null);
   assert.equal(
     browser.parseBrowserTask("open YouTube, search cats, then click the first result"),
     null,
   );
   assert.equal(browser.parseBrowserTask("open https://127.0.0.1/admin"), null);
+  for (const continuation of ["watch", "open", "select"]) {
+    assert.equal(
+      browser.parseBrowserTask(
+        `open YouTube and search cats then ${continuation} the first result`,
+      ),
+      null,
+    );
+  }
+});
+
+test("semantic brain retrieves abilities and asks instead of guessing", () => {
+  const exact = semantic.interpretRequest(
+    "open new tab and search youtube then search for cat videos",
+  );
+  assert.equal(exact.intent, "browser_search");
+  assert.equal(exact.method, "grammar");
+  assert.equal(exact.provider, "youtube");
+  assert.equal(exact.query, "cat videos");
+  assert.equal(exact.needsClarification, false);
+
+  const missingProvider = semantic.interpretRequest("search cats");
+  assert.equal(missingProvider.intent, "browser_search");
+  assert.equal(missingProvider.needsClarification, true);
+  assert.match(missingProvider.clarification, /Which site/i);
+
+  const unsupported = semantic.interpretRequest(
+    "search YouTube for cats then watch the first one",
+  );
+  assert.equal(unsupported.needsClarification, true);
+  assert.match(unsupported.guardrail, /silently/i);
+
+  const preference = semantic.interpretRequest(
+    "Please remember that I prefer short progress updates",
+  );
+  assert.equal(preference.intent, "teach_preference");
+  assert.ok(preference.retrievedCapabilities.length > 0);
 });
 
 test("browser command binds the exact compiled URL and expiry", () => {

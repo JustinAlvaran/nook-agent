@@ -1,6 +1,7 @@
 import { z } from "zod";
 import type { RiskClass, SafeToolName, TaskPlan } from "../contracts";
 import { parseBrowserTask } from "../../browser/commands";
+import { interpretRequest } from "../semantic-brain";
 
 const draftInput = z
   .object({
@@ -309,6 +310,23 @@ function selectTool(
 export function compileSafePlan(input: string, proposed: TaskPlan): TaskPlan {
   if (proposed.blocked)
     return { ...proposed, steps: [], requiresApproval: false };
+  const understanding = interpretRequest(input);
+  if (
+    understanding.needsClarification &&
+    (understanding.intent === "browser_open" ||
+      understanding.intent === "browser_search")
+  )
+    return {
+      ...proposed,
+      userMessage: understanding.understood,
+      riskClass: 0,
+      requiresApproval: false,
+      blocked: true,
+      blockedReason:
+        understanding.clarification ||
+        "Nook needs one browser detail before it can compile an action.",
+      steps: [],
+    };
   const selected = selectTool(input, proposed);
   const mixedResearchDraft =
     /\b(?:research|latest|newest|current|recent|look up|find sources?)\b/i.test(

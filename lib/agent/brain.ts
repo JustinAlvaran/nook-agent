@@ -1,4 +1,5 @@
 import type { RiskClass, SafeToolName } from "./contracts";
+import { interpretRequest } from "./semantic-brain";
 
 export type NookBehavior = {
   initiative: "low" | "balanced" | "proactive";
@@ -93,6 +94,7 @@ const CURRENT =
 
 export function perceiveRequest(raw: string): PerceptionResult {
   const normalizedRequest = raw.trim().replace(/\s+/g, " ");
+  const semantic = interpretRequest(normalizedRequest);
   const preference =
     /\b(?:prefer|preference|be more|be less|always ask|concise|detailed)\b/i.test(
       normalizedRequest,
@@ -125,7 +127,21 @@ export function perceiveRequest(raw: string): PerceptionResult {
     if (!/\b(?:description|bio)\s*[:=-]/i.test(normalizedRequest))
       missingInformation.push("Business description");
   }
-  const probableIntent = preference
+  const semanticIntent =
+    semantic.intent === "browser_open" || semantic.intent === "browser_search"
+      ? "navigate"
+      : semantic.intent === "teach_preference"
+        ? "change_preference"
+        : semantic.intent === "guided_workflow"
+          ? "guided_workflow"
+          : semantic.intent === "research"
+            ? "research"
+            : semantic.intent === "draft"
+              ? "draft"
+              : null;
+  if (semantic.needsClarification && semantic.clarification)
+    missingInformation.push(semantic.clarification);
+  const probableIntent = semanticIntent ?? (preference
     ? "change_preference"
     : research
       ? "research"
@@ -137,14 +153,21 @@ export function perceiveRequest(raw: string): PerceptionResult {
             ? "draft"
             : normalizedRequest
               ? "ask"
-              : "unknown";
+              : "unknown");
   return {
     normalizedRequest,
     probableIntent,
     missingInformation,
     possibleSensitiveData: SECRET.test(normalizedRequest),
     needsClarification: missingInformation.length > 0,
-    confidence: normalizedRequest ? 0.8 : 0,
+    confidence:
+      semantic.confidence === "high"
+        ? 0.95
+        : semantic.confidence === "medium"
+          ? 0.65
+          : normalizedRequest
+            ? 0.35
+            : 0,
   };
 }
 

@@ -7697,6 +7697,53 @@ a {
   }
 }
 
+/* One-scan interpretation: show what Nook heard before it plans or acts. */
+.room-composer > .meaning-strip {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas:
+    "tag method"
+    "meaning meaning";
+  align-items: center;
+  gap: 12px;
+  margin-top: 12px;
+  padding: 11px 12px;
+  border: 1px solid #d9d4ca;
+  border-radius: 12px;
+  background: #fffdf8;
+}
+.meaning-strip > span {
+  grid-area: tag;
+  color: #6f746b;
+  font: 800 8px monospace;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+.meaning-strip b,
+.meaning-strip small {
+  display: block;
+}
+.meaning-strip > div { grid-area: meaning; }
+.meaning-strip b {
+  color: #22242a;
+  font-size: 11px;
+}
+.meaning-strip small {
+  margin-top: 2px;
+  color: #716d66;
+  font-size: 9px;
+  line-height: 1.4;
+}
+.meaning-strip em {
+  grid-area: method;
+  color: #58625a;
+  font: 750 8px monospace;
+  font-style: normal;
+  white-space: nowrap;
+}
+.meaning-strip.is-ready { border-color: #aadccc; background: #f4fff9; }
+.meaning-strip.needs-detail { border-color: #e8c275; background: #fff9e9; }
+
 /* Friendly browser actions: useful immediately, optional connection later. */
 .room-composer > .browser-quick-action {
   display: grid;
@@ -7755,6 +7802,11 @@ a {
   font-size: 9px;
 }
 @media (max-width: 520px) {
+  .room-composer > .meaning-strip {
+    grid-template-columns: 1fr;
+    grid-template-areas: "tag" "meaning" "method";
+  }
+  .meaning-strip em { white-space: normal; }
   .room-composer > .browser-quick-action {
     grid-template-columns: 1fr;
   }

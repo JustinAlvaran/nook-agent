@@ -11,6 +11,7 @@ import type {
 } from "../components/Nook3D";
 import { deriveNookMotionSignal } from "../../lib/agent/nook-motion";
 import { decideResearch, perceiveRequest } from "../../lib/agent/brain";
+import { interpretRequest } from "../../lib/agent/semantic-brain";
 import {
   browserActionLabel,
   browserActionUrl,
@@ -293,6 +294,11 @@ export default function DashboardClient() {
   );
   const [localMemoryMatches, setLocalMemoryMatches] = useState(0);
   const [localMemoryHintIds, setLocalMemoryHintIds] = useState<string[]>([]);
+  const [localCapabilityMatch, setLocalCapabilityMatch] = useState<{
+    label: string;
+    score: number;
+    request: string;
+  } | null>(null);
   const [activeStepNumber, setActiveStepNumber] = useState<number | null>(null);
   const [agentState, setAgentState] = useState<NookAgentState>("ready");
   const [status, setStatus] = useState("Ready for a new task");
@@ -364,6 +370,11 @@ export default function DashboardClient() {
     return stageByState[motionSignal.state] ?? -1;
   }, [motionSignal.state]);
   const perception = useMemo(() => perceiveRequest(command), [command]);
+  const understanding = useMemo(() => interpretRequest(command), [command]);
+  const currentLocalCapability =
+    localCapabilityMatch?.request === command.trim()
+      ? localCapabilityMatch
+      : null;
   const browserIntent = useMemo(() => parseBrowserTask(command), [command]);
   const browserIsConnected = Boolean(
     browserDevices?.some((device) => device.status === "active"),
@@ -385,10 +396,10 @@ export default function DashboardClient() {
     setLocalBrainState("loading");
     setLocalBrainProgress(null);
     try {
-      const { rankApprovedMemoryLocally } = await import(
+      const { retrieveNookContextLocally } = await import(
         "../../lib/agent/local-semantic-memory"
       );
-      const result = await rankApprovedMemoryLocally({
+      const result = await retrieveNookContextLocally({
         request:
           command.trim() ||
           "Use my working preferences and relevant project context",
@@ -402,11 +413,54 @@ export default function DashboardClient() {
       const matches = result.matches.filter((match) => match.score >= 0.28);
       setLocalMemoryMatches(matches.length);
       setLocalMemoryHintIds(matches.map((match) => match.id));
+      setLocalCapabilityMatch(
+        result.capabilities[0]
+          ? { ...result.capabilities[0], request: command.trim() }
+          : null,
+      );
       setLocalBrainState("ready");
     } catch {
       setLocalBrainState("error");
     }
   }
+
+  useEffect(() => {
+    if (localBrainState !== "ready" || command.trim().length < 3) return;
+    let cancelled = false;
+    const timer = window.setTimeout(() => {
+      void import("../../lib/agent/local-semantic-memory")
+        .then(({ retrieveNookContextLocally }) =>
+          retrieveNookContextLocally({
+            request: command,
+            memories: (memories ?? []).map((memory) => ({
+              id: memory.id,
+              content: memory.content,
+            })),
+          }),
+        )
+        .then((result) => {
+          if (cancelled) return;
+          const matches = result.matches.filter((match) => match.score >= 0.28);
+          setLocalMemoryMatches(matches.length);
+          setLocalMemoryHintIds(matches.map((match) => match.id));
+          setLocalCapabilityMatch(
+            result.capabilities[0]
+              ? {
+                  ...result.capabilities[0],
+                  request: command.trim(),
+                }
+              : null,
+          );
+        })
+        .catch(() => {
+          if (!cancelled) setLocalBrainState("error");
+        });
+    }, 400);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [command, localBrainState, memories]);
 
   useEffect(() => {
     let cancelled = false;
@@ -614,10 +668,10 @@ export default function DashboardClient() {
     try {
       let semanticMemoryIds = localMemoryHintIds;
       if (localBrainState === "ready" && memories?.length) {
-        const { rankApprovedMemoryLocally } = await import(
+        const { retrieveNookContextLocally } = await import(
           "../../lib/agent/local-semantic-memory"
         );
-        const localResult = await rankApprovedMemoryLocally({
+        const localResult = await retrieveNookContextLocally({
           request: command,
           memories: memories.map((memory) => ({
             id: memory.id,
@@ -629,6 +683,11 @@ export default function DashboardClient() {
           .map((match) => match.id);
         setLocalMemoryHintIds(semanticMemoryIds);
         setLocalMemoryMatches(semanticMemoryIds.length);
+        setLocalCapabilityMatch(
+          localResult.capabilities[0]
+            ? { ...localResult.capabilities[0], request: command.trim() }
+            : null,
+        );
       }
       const r = await fetch("/api/tasks", {
         method: "POST",
@@ -1244,6 +1303,25 @@ export default function DashboardClient() {
               </button>
             ))}
           </div>
+          {command.trim() && (
+            <div
+              className={`meaning-strip ${understanding.needsClarification ? "needs-detail" : "is-ready"}`}
+              aria-live="polite"
+            >
+              <span>Nook understands</span>
+              <div>
+                <b>{understanding.label}</b>
+                <small>{understanding.understood}</small>
+              </div>
+              <em>
+                {currentLocalCapability
+                  ? "Private brain · best ability match"
+                  : understanding.method === "grammar"
+                    ? "Safe grammar · exact"
+                    : `Understood locally · ${understanding.confidence}`}
+              </em>
+            </div>
+          )}
           {browserIntent && (
             <div className="browser-quick-action">
               <div>
@@ -1380,10 +1458,12 @@ export default function DashboardClient() {
               </button>
             </article>
             <article>
-              <small>Attention</small>
-              <b>{perception.probableIntent.replaceAll("_", " ")}</b>
+              <small>Semantic route</small>
+              <b>{currentLocalCapability?.label ?? understanding.label}</b>
               <span>
-                {Math.round(perception.confidence * 100)}% salience · one focus
+                {currentLocalCapability
+                  ? "Retrieved privately from Nook's ability cards"
+                  : `${understanding.confidence} confidence · deterministic fallback`}
               </span>
             </article>
             <article>

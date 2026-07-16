@@ -109,18 +109,20 @@ test("teaching allocates review-gated memory and motion renders an action-ready 
   assert.match(nook3d, /sculptRuntime/);
 });
 
-test("private local semantic memory is opt-in and provider independent", async () => {
+test("private local semantic RAG is opt-in and provider independent", async () => {
   const [dashboard, localMemory, packageJson] = await Promise.all([
     read("../app/dashboard/DashboardClient.tsx"),
     read("../lib/agent/local-semantic-memory.ts"),
     read("../package.json"),
   ]);
   assert.match(dashboard, /Load private local ML/);
-  assert.match(dashboard, /rankApprovedMemoryLocally/);
+  assert.match(dashboard, /retrieveNookContextLocally/);
+  assert.match(dashboard, /Nook understands/);
   assert.match(localMemory, /feature-extraction/);
   assert.match(localMemory, /webgpu/);
   assert.match(localMemory, /wasm/);
   assert.match(localMemory, /already-approved memory/);
+  assert.match(localMemory, /SEMANTIC_CAPABILITIES/);
   assert.match(dashboard, /localMemoryIds/);
   assert.match(packageJson, /@huggingface\/transformers/);
   assert.doesNotMatch(localMemory, /OPENAI_API_KEY|apiKey/);

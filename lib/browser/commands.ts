@@ -52,9 +52,21 @@ export type BrowserCommand = {
   action: BrowserToolInput & { url: string };
 };
 
-const providerPattern = "youtube|google|bing|wikipedia|github";
+const providerPattern =
+  "youtube|you\\s*tube|yt|youtub|google|googl|bing|wikipedia|wiki|wikipdia|github|git\\s*hub";
 const unsupportedContinuation =
-  /\b(?:and|then)\s+(?:click|play|like|comment|subscribe|sign\s*in|log\s*in|submit|download|upload|buy|pay|delete|type|fill)\b/i;
+  /\b(?:(?:and\s+)?then|and|after\s+that)\s+(?:click|watch|play|open|select|choose|follow|view|press|like|comment|subscribe|sign\s*in|log\s*in|submit|download|upload|buy|pay|delete|type|fill)\b/i;
+
+function resolveProvider(value: string | undefined): BrowserProvider | null {
+  const normalized = value?.toLowerCase().replace(/\s+/g, "") ?? "";
+  if (["youtube", "yt", "youtub"].includes(normalized)) return "youtube";
+  if (["google", "googl"].includes(normalized)) return "google";
+  if (normalized === "bing") return "bing";
+  if (["wikipedia", "wiki", "wikipdia"].includes(normalized))
+    return "wikipedia";
+  if (normalized === "github") return "github";
+  return null;
+}
 
 function cleanQuery(value: string) {
   return value
@@ -74,15 +86,14 @@ export function parseBrowserTask(input: string): BrowserToolInput | null {
 
   // Accept the way people naturally ask for this, including phrases such as
   // "open a new tab and search YouTube then search for cat videos".
-  const mentionedProvider = normalized.match(
+  const mentionedProvider = resolveProvider(normalized.match(
     new RegExp(`\\b(${providerPattern})(?:\\.com)?\\b`, "i"),
-  )?.[1]?.toLowerCase() as BrowserProvider | undefined;
+  )?.[1]);
   const naturalQuery = normalized.match(
     /\b(?:search\s+for|look\s+up)\s+(.+)$/i,
   )?.[1];
   if (
     mentionedProvider &&
-    mentionedProvider in BROWSER_PROVIDERS &&
     naturalQuery &&
     /\b(?:open|launch|go\s+to|new\s+tab)\b/i.test(normalized)
   ) {
@@ -96,19 +107,26 @@ export function parseBrowserTask(input: string): BrowserToolInput | null {
 
   const searchPatterns = [
     new RegExp(
-      `\\b(?:open|launch|go\\s+to)\\s+(?:a\\s+new\\s+tab\\s+(?:for|with)\\s+)?(${providerPattern})(?:\\s+(?:and|then))?\\s+(?:search(?:\\s+for)?|look\\s+up)\\s+(.+)$`,
+      `\\b(?:open|launch|go\\s+to|take\\s+me\\s+to|pull\\s+up)\\s+(?:a\\s+new\\s+tab\\s+(?:for|with)\\s+)?(${providerPattern})(?:\\s+(?:and|then))?\\s+(?:search(?:\\s+for)?|look\\s+up|find)\\s+(.+)$`,
       "i",
     ),
     new RegExp(
-      `\\b(?:search|look\\s+up)\\s+(?:on\\s+)?(${providerPattern})\\s+(?:for\\s+)?(.+)$`,
+      `\\b(?:search|look\\s+up|find)\\s+(?:on\\s+)?(${providerPattern})\\s+(?:for\\s+)?(.+)$`,
+      "i",
+    ),
+    new RegExp(
+      `\\b(?:search(?:\\s+for)?|look\\s+up|find)\\s+(.+?)\\s+(?:on|using)\\s+(${providerPattern})\\s*$`,
       "i",
     ),
   ];
   for (const pattern of searchPatterns) {
     const match = normalized.match(pattern);
-    const provider = match?.[1]?.toLowerCase() as BrowserProvider | undefined;
-    const query = match?.[2] ? cleanQuery(match[2]) : "";
-    if (provider && provider in BROWSER_PROVIDERS && query)
+    const reversed = pattern === searchPatterns[2];
+    const provider = resolveProvider(match?.[reversed ? 2 : 1]);
+    const query = match?.[reversed ? 1 : 2]
+      ? cleanQuery(match[reversed ? 1 : 2])
+      : "";
+    if (provider && query && query.toLowerCase() !== "for")
       return {
         action: "search_provider",
         provider,
@@ -119,12 +137,12 @@ export function parseBrowserTask(input: string): BrowserToolInput | null {
 
   const open = normalized.match(
     new RegExp(
-      `\\b(?:open|launch|go\\s+to)\\s+(?:a\\s+new\\s+tab\\s+(?:for|with)\\s+)?(${providerPattern})(?:\\.com)?\\s*$`,
+      `\\b(?:open|launch|go\\s+to|take\\s+me\\s+to|pull\\s+up)\\s+(?:a\\s+new\\s+tab\\s+(?:for|with)\\s+)?(${providerPattern})(?:\\.com)?\\s*$`,
       "i",
     ),
   );
-  const provider = open?.[1]?.toLowerCase() as BrowserProvider | undefined;
-  return provider && provider in BROWSER_PROVIDERS
+  const provider = resolveProvider(open?.[1]);
+  return provider
     ? { action: "open_provider", provider, disposition: "new_tab" }
     : null;
 }
